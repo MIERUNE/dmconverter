@@ -1,0 +1,20 @@
+[general]
+name=Sample
+qgisMinimumVersion=3.0
+about=QGIS Sample Plugin
+description=QGIS Sample Plugin
+# Version will be updated with release tag on Github workflow
+version={{PLUGIN_VERSION}}
+
+supportsQt6=True
+
+#Plugin main icon
+icon=imgs/icon.png
+
+author=MIERUNE Inc.
+email=info@mierune.co.jp
+homepage=
+tracker=
+repository=
+tags=
+category=
