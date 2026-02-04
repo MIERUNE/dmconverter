@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "@ZUKAKU",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::2444" } },
+"features": [
+{ "type": "Feature", "properties": { "CODE": "02JF711", "NAME": "四辻", "TITLE": "大分市共用空間データ", "LEVEL": "1000", "REPEAT": "1", "UNIT": "0", "ZUKAKU_COD": "0", "HENKAN_COD": "0", "SOKUCHISEI": "1", "HOSEI": "0", "HOSEI1": "0", "HOSEI2": "0", "HOSEI3": "0", "HOSEI4": "0", "HOSEI5": "0", "QP0": "7500.0000 44000.0000", "QP1": "9000.0000 44000.0000", "QP2": "9000.0000 46000.0000", "QP3": "7500.0000 46000.0000", "NEAR": "02JF604,02JF613,,,,,,02JF702", "AKI_a": null, "AKI_b": null, "AKI_c": null, "AKI_1": "1", "NLayer": "0", "Ver": "1", "HEAD11": "603,508,1,1,ＳｕｍｍｉｔＥｖｏｌｕｔｉｏｎ,平１７九公第３３号", "HEAD11A": "1,0,0,0,0,0,0,0,0", "HEAD12": "株式会社パスコ                          \r\n", "HEAD12A": "0,0,0,0,0,0,0,0", "HEAD13": "C17A,0505,10000,4,5174,5177,,,0,0,0,0,,,0,0,0,0", "HEAD_AKI_d": "0 0 0 0 0 0", "HEAD_AKI_e": null, "HEAD_AKI_f": null, "HEAD21": "1703,1610,1,1,ＳｕｍｍｉｔＥｖｏｌｕｔｉｏｎ,平２８九公第１７３号", "HEAD21A": "1,0,0,0,0,0,0,0,0", "HEAD22": "株式会社パスコ                          \r\n", "HEAD22A": "0,0,0,0,0,0,0,0", "HEAD23": "0   ,1310,8000,1,0,0,,,0,0,0,0,,,0,0,0,0", "HEAD_AKI_d2": "0 0 0 0 0 0", "HEAD_AKI_e2": null, "HEAD_AKI_f2": null }, "geometry": { "type": "LineString", "coordinates": [ [ 44000.0, 7500.0 ], [ 44000.0, 9000.0 ], [ 46000.0, 9000.0 ], [ 46000.0, 7500.0 ], [ 44000.0, 7500.0 ] ] } }
+]
+}

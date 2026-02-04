@@ -1,0 +1,86 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>データテスト</title>
+  <style type="text/css">
+    body{
+      font-size         : 12px;
+      background-color  : #F6FCF1;
+    }
+    table{
+      border-collapse   : collapse;
+      font-size         : 12px;
+      background-color  : #EAF9DE;
+    }
+    table td{
+    	border            : 1px solid #408707;
+    	background-color  : #F2F9ED;
+    }
+  </style>
+  <script language="javascript" type="text/javascript" src="mod_common.js"></script>
+  <script language="javascript" type="text/javascript" src="data.js"></script>
+  <script language="javascript" type="text/javascript">
+    window.onload = function(){
+      var objCom = new com();
+      var oForm = objCom.Object("dForm");
+      if(oForm != null){
+        var oData = new GSI_PublicSurveyData();
+        if(oData != null){      
+          document.title = ClassGSI_PublicSurveyData.Name;
+          
+          var dHTML  = "";
+              dHTML += "<table border=\"0\" cellpadding=\"2\" cellspacing=\"0\">";
+                dHTML += "<tr>";
+                  dHTML += "<td style=\"background-color:#5FAA5D;\">Name</td><td>" + ClassGSI_PublicSurveyData.Name + "</td>";
+                dHTML += "</tr>";
+                dHTML += "<tr>";
+                  dHTML += "<td style=\"background-color:#5FAA5D;\">Last</td><td>" + ClassGSI_PublicSurveyData.Last + "</td>";
+                dHTML += "</tr>";
+                dHTML += "<tr>";
+                  dHTML += "<td style=\"background-color:#5FAA5D;\">Ver </td><td>" + ClassGSI_PublicSurveyData.Ver  + "</td>";
+                dHTML += "</tr>";
+              dHTML += "</table>";
+          
+            var n = 0;
+
+            dHTML += "<br />";
+
+            dHTML += "■ 作業種別<br />";
+            dHTML += "<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:800px;\">";
+            for(n = 0; n < oData.dWorkType.length; n++){
+              dHTML += "<tr>";
+                dHTML += "<td>" + oData.dWorkType[n] + "</td>";              
+              dHTML += "</tr>";
+            }
+            dHTML += "</table>";
+
+            dHTML += "<br />";
+
+            dHTML += "■ 確認シート<br />";
+            dHTML += "<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:800px;\">";
+            for(n = 0; n < oData.dSheetListName.length; n++){
+              if(n == 0){
+                dHTML += "<tr>";
+                  dHTML += "<td style=\"text-align:center;background-color:#91C58B;\">作業種別</td>";              
+                  dHTML += "<td style=\"text-align:center;background-color:#91C58B;\">名称</td>";              
+                dHTML += "</tr>";              
+              }
+              dHTML += "<tr>";
+                dHTML += "<td>" + oData.dSheetListType[n]   + "</td>";
+                dHTML += "<td>" + oData.dSheetListName[n]   + "</td>";              
+              dHTML += "</tr>";
+            }
+            dHTML += "</table>";
+
+          oForm.innerHTML = dHTML;
+        }
+      }
+    };
+  </script>
+</head>
+<body>
+<div id="dForm">スクリプトエラー</div>
+</body>
+</html>
