@@ -330,11 +330,23 @@ class ElementGroup:
 # 各関数は入力に対して常に同じ出力を返す純粋関数
 
 def parse_index_record(line: str) -> IndexRecord:
-    """インデックスレコードをパース。"""
+    """
+    インデックスレコードをパース。
+
+    座標系コードは図郭ID（map_sheet_id）の先頭2桁から取得する。
+    例: "02JF613" → coordinate_system = 2
+    """
     ...
 
 def parse_map_sheet_records(lines: tuple[str, ...]) -> MapSheetRecord:
-    """図郭レコード群をパース。"""
+    """
+    図郭レコード群をパース。
+
+    測地成果区分コード（survey_result_code）はインデックスレコード(a)の
+    53桁目以降の末尾数字から取得する。通常3桁で、2桁目が測地成果区分コード。
+    - 0, 1: JGD2000（日本測地系2000）
+    - 2: JGD2011（日本測地系2011）
+    """
     ...
 
 def parse_group_header(line: str) -> tuple[str, int, int]:
@@ -767,7 +779,12 @@ def create_memory_layer(
     crs: QgsCoordinateReferenceSystem,
     fields: tuple[tuple[str, str], ...]
 ) -> QgsVectorLayer:
-    """メモリレイヤを作成する。"""
+    """
+    メモリレイヤを作成する。
+
+    Note: CRSはURIパラメータと明示的なsetCrs()の両方で設定し、
+    QGIS環境の初期化状態に関わらず確実にCRSが設定されるようにする。
+    """
     ...
 
 def create_feature(
@@ -847,7 +864,8 @@ def save_layer_to_geopackage(
 
 def save_layers_to_geopackage(
     layers: tuple[QgsVectorLayer, ...],
-    output_path: Path
+    output_path: Path,
+    crs_code: int | None = None
 ) -> tuple[WriteResult, ...]:
     """
     複数レイヤをGeoPackageファイルに保存する。
@@ -855,9 +873,16 @@ def save_layers_to_geopackage(
     Args:
         layers: 保存するレイヤのタプル
         output_path: 出力ファイルパス
+        crs_code: EPSGコード（指定時はSQLite直接操作でCRSを確実に設定）
 
     Returns:
         各レイヤの書き込み結果のタプル
+
+    Note:
+        QGIS環境が完全に初期化されていない場合、CRSが正しく設定されない
+        ことがある。crs_codeを指定することで、GeoPackageのSQLiteテーブル
+        （gpkg_spatial_ref_sys, gpkg_geometry_columns, gpkg_contents）を
+        直接更新し、CRSを確実に設定する。
     """
     ...
 ```
