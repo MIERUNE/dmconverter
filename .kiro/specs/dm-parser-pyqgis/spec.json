@@ -1,9 +1,9 @@
 {
   "feature_name": "dm-parser-pyqgis",
   "created_at": "2026-02-05T00:00:00+09:00",
-  "updated_at": "2026-02-05T01:30:00+09:00",
+  "updated_at": "2026-02-05T02:00:00+09:00",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "ready-for-implementation",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -15,8 +15,8 @@
     },
     "tasks": {
       "generated": true,
-      "approved": false
+      "approved": true
     }
   },
-  "ready_for_implementation": false
+  "ready_for_implementation": true
 }
