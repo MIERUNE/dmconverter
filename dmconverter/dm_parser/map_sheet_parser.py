@@ -168,9 +168,19 @@ def parse_map_sheet_records(
     # Get coordinate unit
     coordinate_unit = int(index_b.get("coordinate_unit", 1))
 
-    # Survey result code (geodetic datum) - default to JGD2011 (code 2)
-    # This may need to be extracted from other records
-    survey_result_code = 2
+    # Survey result code (geodetic datum) - extract from index record line
+    # The trailing numbers in index_a line contain geodetic datum info
+    # Format: position 53+ contains flags, typically 3 digits where
+    # 2nd digit is geodetic datum code (1=JGD2000, 2=JGD2011)
+    survey_result_code = 1  # Default to JGD2000 for older data
+    if len(index_lines) > 0:
+        line_a = index_lines[0]
+        trailing = extract_field(line_a, 53, len(line_a)).strip()
+        if len(trailing) >= 2:
+            # 2nd digit is geodetic datum code
+            datum_code = parse_int(trailing[1], 1)
+            if datum_code in (1, 2):
+                survey_result_code = datum_code
 
     return MapSheetRecord(
         sheet_id=sheet_id,

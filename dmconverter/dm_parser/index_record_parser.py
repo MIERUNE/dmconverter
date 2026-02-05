@@ -57,17 +57,15 @@ def parse_index_record_a(line: str) -> dict[str, str | int]:
     # Position 33-52: Organization name
     organization_name = extract_field(line, 33, 53)
 
-    # Position 53+: Contains coordinate system code
-    # The coordinate system is typically the first digit of the trailing numbers
-    remaining = extract_field(line, 53, len(line))
-    # Extract coordinate system code (first digit, 1-19)
+    # Extract coordinate system code from map sheet ID
+    # Japanese DM map sheet IDs start with 2-digit coordinate system code
+    # e.g., "02JF613" -> coordinate system 2
     coordinate_system = 1  # Default
-    if remaining:
-        # Extract first non-space character sequence and get first digit
-        nums = remaining.strip()
-        if nums:
-            # First character is typically the coordinate system code
-            coordinate_system = parse_int(nums[0], 1)
+    if map_sheet_id and len(map_sheet_id) >= 2:
+        coord_sys_str = map_sheet_id[:2]
+        coord_sys = parse_int(coord_sys_str, 0)
+        if 1 <= coord_sys <= 19:
+            coordinate_system = coord_sys
 
     return {
         "record_type": record_type,

@@ -231,8 +231,8 @@ def save_dm_to_geopackage(
             context={"file": dm_file_path},
         )
 
-    # Save to GeoPackage
-    success = save_layers_to_geopackage(layers, output_path)
+    # Save to GeoPackage with explicit CRS code
+    success = save_layers_to_geopackage(layers, output_path, crs_code=dm_data.crs_code)
 
     if success:
         return Success(value=output_path)

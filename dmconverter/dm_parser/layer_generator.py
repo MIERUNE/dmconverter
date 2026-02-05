@@ -83,7 +83,10 @@ def create_memory_layer(
     if not QGIS_AVAILABLE:
         raise ImportError("QGIS modules are not available")
 
-    # Create layer URI
+    # Create CRS object explicitly
+    crs = QgsCoordinateReferenceSystem(f"EPSG:{crs_code}")
+
+    # Create layer URI with CRS
     uri = f"{geometry_type}?crs=EPSG:{crs_code}"
 
     # Create the layer
@@ -91,6 +94,9 @@ def create_memory_layer(
 
     if not layer.isValid():
         raise ValueError(f"Failed to create layer: {name}")
+
+    # Explicitly set CRS on the layer (ensures it's set even if URI parsing fails)
+    layer.setCrs(crs)
 
     # Add standard fields
     provider = layer.dataProvider()
@@ -393,15 +399,66 @@ def save_layer_to_geopackage(
     return error[0] == QgsVectorFileWriter.NoError
 
 
+def _ensure_gpkg_crs(output_path: str, crs_code: int) -> None:
+    """Ensure CRS is properly set in GeoPackage using SQLite.
+
+    This function directly updates the GeoPackage database to set the
+    correct CRS when QGIS environment doesn't properly initialize it.
+
+    Args:
+        output_path: Path to the GeoPackage file
+        crs_code: EPSG code for the coordinate reference system
+    """
+    import sqlite3
+
+    conn = sqlite3.connect(output_path)
+    cursor = conn.cursor()
+
+    # Check if CRS already exists
+    cursor.execute(
+        "SELECT srs_id FROM gpkg_spatial_ref_sys WHERE srs_id = ?",
+        (crs_code,),
+    )
+    if not cursor.fetchone():
+        # Get WKT for the CRS
+        crs = QgsCoordinateReferenceSystem(f"EPSG:{crs_code}")
+        wkt = crs.toWkt()
+
+        # Insert CRS definition
+        cursor.execute(
+            """INSERT INTO gpkg_spatial_ref_sys
+               (srs_name, srs_id, organization, organization_coordsys_id, definition)
+               VALUES (?, ?, 'EPSG', ?, ?)""",
+            (f"EPSG:{crs_code}", crs_code, crs_code, wkt),
+        )
+
+    # Update all geometry columns to use this CRS
+    cursor.execute(
+        "UPDATE gpkg_geometry_columns SET srs_id = ?",
+        (crs_code,),
+    )
+
+    # Also update gpkg_contents
+    cursor.execute(
+        "UPDATE gpkg_contents SET srs_id = ? WHERE data_type = 'features'",
+        (crs_code,),
+    )
+
+    conn.commit()
+    conn.close()
+
+
 def save_layers_to_geopackage(
     layers: Sequence["QgsVectorLayer"],
     output_path: str,
+    crs_code: int | None = None,
 ) -> bool:
     """Save multiple layers to a single GeoPackage file.
 
     Args:
         layers: Sequence of QgsVectorLayer objects to save
         output_path: Path for the output GeoPackage file
+        crs_code: Optional EPSG code to set for CRS (used when QGIS env not fully initialized)
 
     Returns:
         True if all layers were saved successfully, False otherwise
@@ -412,13 +469,26 @@ def save_layers_to_geopackage(
     if not layers:
         return False
 
-    # Save first layer (creates the file)
+    import os
+
+    # Remove existing file to ensure clean write
+    if os.path.exists(output_path):
+        os.remove(output_path)
+
+    # Get CRS code from first layer if not provided
     first_layer = layers[0]
+    if crs_code is None:
+        crs = first_layer.crs()
+        if crs.isValid():
+            auth_id = crs.authid()
+            if auth_id.startswith("EPSG:"):
+                crs_code = int(auth_id.replace("EPSG:", ""))
+
     options = QgsVectorFileWriter.SaveVectorOptions()
     options.driverName = "GPKG"
     options.layerName = first_layer.name()
 
-    error = QgsVectorFileWriter.writeAsVectorFormatV3(
+    error = QgsVectorFileWriter.writeAsVectorFormatV2(
         first_layer,
         output_path,
         first_layer.transformContext(),
@@ -437,7 +507,7 @@ def save_layers_to_geopackage(
             QgsVectorFileWriter.CreateOrOverwriteLayer
         )
 
-        error = QgsVectorFileWriter.writeAsVectorFormatV3(
+        error = QgsVectorFileWriter.writeAsVectorFormatV2(
             layer,
             output_path,
             layer.transformContext(),
@@ -446,5 +516,9 @@ def save_layers_to_geopackage(
 
         if error[0] != QgsVectorFileWriter.NoError:
             return False
+
+    # Ensure CRS is properly set in GeoPackage
+    if crs_code is not None and crs_code > 0:
+        _ensure_gpkg_crs(output_path, crs_code)
 
     return True
