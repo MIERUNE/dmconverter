@@ -1,6 +1,6 @@
 """QgsProcessingAlgorithm: DM→GeoPackage変換アルゴリズム
 
-入力: 複数DMファイル選択 or フォルダ指定（両対応）
+入力: 複数DMファイル選択 or フォルダ指定
 出力: GeoPackageファイル
 """
 
@@ -18,11 +18,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     OUTPUT = "OUTPUT"
 
     def name(self):
-        """アルゴリズムの内部ID（英語、小文字）"""
+        """アルゴリズムの内部ID"""
         return "dm_to_geopackage"
 
     def displayName(self):
-        """Processing Toolbox に表示される名前"""
+        """Processing Toolbox の表示名"""
         return "DMファイルをGeoPackageに変換"
 
     def group(self):
@@ -36,15 +36,12 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         return "DMファイルをGeoPackageに変換します。複数ファイルまたはフォルダを指定できます。"
 
     def createInstance(self):
-        """QGISが内部でアルゴリズムの複製を作るために使う（お決まりの書き方）"""
+        """QGISが内部でアルゴリズムの複製を作るために使うメソッド"""
         return DmToGeoPackageAlgorithm()
 
     def initAlgorithm(self, config=None):
-        """入力・出力パラメータの定義
-
-        ここで定義した内容が Processing ダイアログの入力欄になる。
-        """
-        # 入力: DMファイル選択（任意）
+        """Processing ダイアログの入力・出力パラメータの定義"""
+        # 入力: DMファイル選択
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT_FILES,
@@ -55,7 +52,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # 入力: フォルダ指定（任意）
+        # 入力: フォルダ指定
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT_FOLDER,

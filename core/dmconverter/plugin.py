@@ -1,6 +1,6 @@
 from qgis.core import QgsApplication
 
-from .core.dmconverter.provider import DmConverterProvider
+from .provider import DmConverterProvider
 
 
 class Plugin:
