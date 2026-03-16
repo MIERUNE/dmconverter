@@ -7,4 +7,3 @@ DMファイル（84バイト固定長レコード）をGeoPackageに変換する
 
 from pathlib import Path
 from typing import List, Optional
-

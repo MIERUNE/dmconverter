@@ -16,7 +16,9 @@ class DmConverterProvider(QgsProcessingProvider):
         return "DM Converter"
 
     def icon(self):
-        icon_path = os.path.join(os.path.dirname(__file__), '..', '..', 'imgs', 'icon.png')
+        icon_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "imgs", "icon.png"
+        )
         return QIcon(icon_path)
 
     def loadAlgorithms(self):
