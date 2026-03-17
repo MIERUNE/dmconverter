@@ -33,7 +33,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         """ダイアログ右側に表示されるヘルプ文"""
-        return "DMファイルをGeoPackageに変換します。複数ファイルまたはフォルダを指定できます。"
+        return "DMファイルをGeoPackageに変換します。ファイルまたはフォルダを指定できます。"
 
     def createInstance(self):
         """QGISが内部でアルゴリズムの複製を作るために使うメソッド"""
@@ -45,7 +45,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT_FILES,
-                "DMファイル",
+                "DMファイル（単一ファイルを指定する場合）",
                 behavior=QgsProcessingParameterFile.File,
                 fileFilter="DM Files (*.dm)",
                 optional=True,
@@ -56,7 +56,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT_FOLDER,
-                "DMファイルが格納されたフォルダ",
+                "DMファイルが格納されたフォルダ（複数ファイルを一括処理する場合）",
                 behavior=QgsProcessingParameterFile.Folder,
                 optional=True,
             )
