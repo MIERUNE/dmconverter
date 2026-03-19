@@ -9,5 +9,6 @@ dependencies = []
 [dependency-groups]
 dev = [
     "pyqt5-stubs>=5.15.6.0",
+    "pytest>=8.4.2",
     "ruff>=0.8.2",
 ]
