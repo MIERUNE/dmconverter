@@ -2,6 +2,6 @@
 
 
 def classFactory(iface):
-    from .plugin import Plugin
+    from .core.dmconverter.plugin import Plugin
 
     return Plugin(iface)
