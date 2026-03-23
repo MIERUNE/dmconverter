@@ -13,20 +13,35 @@ def _detect_encoding(path: str) -> str:
 
     判定順序:
         1. UTF-8 BOM があれば utf-8-sig
-        2. UTF-8 としてデコードできれば utf-8
-        3. フォールバックとして cp932 (Shift_JIS 上位互換)
+        2. BOM なしで UTF-8 としてデコードできれば utf-8
+        3. cp932 としてデコードできれば cp932
+        4. いずれも失敗した場合は ValueError
+
+    Raises:
+        ValueError: エンコーディングを判定できない場合
     """
     with open(path, "rb") as f:
         raw = f.read()
 
+    # BOM あり → UTF-8
     if raw.startswith(b"\xef\xbb\xbf"):
         return "utf-8-sig"
 
+    # BOM なし → UTF-8 として検証
     try:
         raw.decode("utf-8")
         return "utf-8"
     except UnicodeDecodeError:
+        pass
+
+    # UTF-8 でなければ cp932 として検証
+    try:
+        raw.decode("cp932")
         return "cp932"
+    except UnicodeDecodeError:
+        raise ValueError(
+            f"エンコーディングを判定できません: {path}"
+        )
 
 
 def read_records(path: str) -> Iterator[str]:
@@ -40,7 +55,7 @@ def read_records(path: str) -> Iterator[str]:
 
     Raises:
         FileNotFoundError: ファイルが存在しない場合
-        UnicodeDecodeError: エンコーディングの検出に失敗した場合
+        ValueError: エンコーディングを判定できない場合
     """
     encoding = _detect_encoding(path)
 
