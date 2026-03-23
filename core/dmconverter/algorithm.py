@@ -1,6 +1,6 @@
 """QgsProcessingAlgorithm: DM→GeoPackage変換アルゴリズム
 
-入力: 複数DMファイル選択 or フォルダ指定
+入力: DMファイル選択 or フォルダ指定
 出力: GeoPackageファイル
 """
 
@@ -12,10 +12,10 @@ from qgis.core import (
 
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
-    # パラメータの名前（内部で使うキー）
     INPUT_FILES = "INPUT_FILES"
     INPUT_FOLDER = "INPUT_FOLDER"
     OUTPUT = "OUTPUT"
+    STYLE_FOLDER = "STYLE_FOLDER"
 
     def name(self):
         """アルゴリズムの内部ID"""
@@ -33,7 +33,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         """ダイアログ右側に表示されるヘルプ文"""
-        return "DMファイルをGeoPackageに変換します。複数ファイルまたはフォルダを指定できます。"
+        return (
+            "DMファイルをGeoPackageに変換します。どちらか一方を指定してください。スタイルフォルダを指定すると、変換後にQMLスタイルを自動適用します。\n"
+            "単一ファイル処理：DMファイルを指定\n"
+            "複数ファイル処理：フォルダを指定\n\n"
+        )
 
     def createInstance(self):
         """QGISが内部でアルゴリズムの複製を作るために使うメソッド"""
@@ -45,7 +49,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT_FILES,
-                "DMファイル",
+                "入力：DMファイル",
                 behavior=QgsProcessingParameterFile.File,
                 fileFilter="DM Files (*.dm)",
                 optional=True,
@@ -56,7 +60,17 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT_FOLDER,
-                "DMファイルが格納されたフォルダ",
+                "入力：DMファイルが格納されたフォルダ",
+                behavior=QgsProcessingParameterFile.Folder,
+                optional=True,
+            )
+        )
+
+        # オプション: スタイルフォルダ（QML）
+        self.addParameter(
+            QgsProcessingParameterFile(
+                self.STYLE_FOLDER,
+                "入力：スタイルフォルダ（QML）",
                 behavior=QgsProcessingParameterFile.Folder,
                 optional=True,
             )
@@ -66,7 +80,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
-                "出力GeoPackage",
+                "出力：GeoPackage",
                 fileFilter="GeoPackage Files (*.gpkg)",
             )
         )
