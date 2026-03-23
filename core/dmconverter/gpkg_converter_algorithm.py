@@ -12,7 +12,6 @@ from qgis.core import (
 
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
-    # パラメータの名前（内部で使うキー）
     INPUT_FILES = "INPUT_FILES"
     INPUT_FOLDER = "INPUT_FOLDER"
     OUTPUT = "OUTPUT"
