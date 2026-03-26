@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Iterator
 
 
-def _detect_encoding(path: str) -> str:
+def detect_encoding(path: str) -> str:
     """ファイルのエンコーディングを判定する。
 
     判定順序:
@@ -42,23 +42,20 @@ def _detect_encoding(path: str) -> str:
         raise ValueError(f"エンコーディングを判定できません: {path}")
 
 
-def read_records(path: str) -> Iterator[str]:
+def read_records(path: str) -> Iterator[bytes]:
     """DMファイルを1レコードずつ読み取る。
 
+    バイナリモードで読み取り、84バイトのレコードをそのまま返す。
+    固定長フィールドのパースに対応するため、bytes型で返す。
     Args:
         path: DMファイルのパス
-
     Yields:
-        レコード文字列（改行除去済み）
-
+        レコード（bytes型、改行除去済み）
     Raises:
         FileNotFoundError: ファイルが存在しない場合
-        ValueError: エンコーディングを判定できない場合
     """
-    encoding = _detect_encoding(path)
-
-    with open(path, "r", encoding=encoding) as f:
+    with open(path, "rb") as f:
         for line in f:
-            record = line.rstrip("\r\n")
+            record = line.rstrip(b"\r\n")
             if record:
                 yield record
