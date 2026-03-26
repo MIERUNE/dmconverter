@@ -74,13 +74,15 @@ def _is_skip_prefix(record: str) -> bool:
     return record.startswith("G ") or record.startswith("T ")
 
 
-def _has_separate_coordinates(element_type: str) -> bool:
-    """後続に座標行を持つ要素タイプか判定する。
+def _has_following_lines(element_type: str) -> bool:
+    """後続行を持つ要素タイプか判定する。
 
-    E1-E4 は後続行に座標データを持つ。
-    E5-E8 は座標が E行自体に埋め込まれている。
+    E1-E4: 後続行に座標データを持つ。
+    E5:    座標がE行自体に埋め込まれているため後続行なし。
+    E6:    後続行に座標データを持つ。
+    E7/E8: 後続行に注記・属性データを持つ。
     """
-    return element_type in "1234"
+    return element_type in "1234678"
 
 
 def classify(records: Iterator[str]) -> ClassifiedRecords:
@@ -127,9 +129,24 @@ def classify(records: Iterator[str]) -> ClassifiedRecords:
     while pos < len(record_list):
         record = record_list[pos]
 
-        # 修正履歴・G/Tレコードは読み飛ばす
-        if _is_modification_history(record) or _is_skip_prefix(record):
+        # G/Tレコードは読み飛ばす
+        if _is_skip_prefix(record):
             pos += 1
+            continue
+
+        # 修正履歴レコードは後続行ごとスキップする
+        if _is_modification_history(record):
+            pos += 1
+            if _is_element_prefix(record) and _has_following_lines(record[1]):
+                while pos < len(record_list):
+                    next_record = record_list[pos]
+                    if (
+                        _is_header_prefix(next_record)
+                        or _is_element_prefix(next_record)
+                        or _is_skip_prefix(next_record)
+                    ):
+                        break
+                    pos += 1
             continue
 
         # H行: 新しい要素グループの開始
@@ -151,8 +168,9 @@ def classify(records: Iterator[str]) -> ClassifiedRecords:
         if _is_element_prefix(record):
             element_type = record[1]
 
-            if _has_separate_coordinates(element_type):
-                # E1-E4: 後続の座標行を収集
+            if _has_following_lines(element_type):
+                # 後続行（座標行/注記行）を収集
+                # 座標行は84バイト全体がデータなので修正履歴チェックは行わない
                 coord_lines: list[str] = []
                 pos += 1
                 while pos < len(record_list):
@@ -163,8 +181,7 @@ def classify(records: Iterator[str]) -> ClassifiedRecords:
                         or _is_skip_prefix(next_record)
                     ):
                         break
-                    if not _is_modification_history(next_record):
-                        coord_lines.append(next_record)
+                    coord_lines.append(next_record)
                     pos += 1
                 current_elements.append(
                     ElementRecord(
