@@ -3,7 +3,7 @@ import unittest
 
 from core.dmconverter.classifier import (
     ClassifiedRecords,
-    _has_separate_coordinates,
+    _has_following_lines,
     _is_element_prefix,
     _is_header_prefix,
     _is_modification_history,
@@ -80,16 +80,22 @@ class TestIsSkipPrefix(unittest.TestCase):
         self.assertFalse(_is_skip_prefix("H 2100"))
 
 
-class TestHasSeparateCoordinates(unittest.TestCase):
-    def test_e1_to_e4_have_coordinates(self):
+class TestHasFollowingLines(unittest.TestCase):
+    def test_e1_to_e4_have_following_lines(self):
+        """E1-E4は後続の座標行を持つ"""
         for t in "1234":
             with self.subTest(t=t):
-                self.assertTrue(_has_separate_coordinates(t))
+                self.assertTrue(_has_following_lines(t))
 
-    def test_e5_to_e8_have_no_coordinates(self):
-        for t in "5678":
+    def test_e5_has_no_following_lines(self):
+        """E5は座標がE行に埋め込まれているため後続行なし"""
+        self.assertFalse(_has_following_lines("5"))
+
+    def test_e6_to_e8_have_following_lines(self):
+        """E6は座標行、E7/E8は注記データ行を持つ"""
+        for t in "678":
             with self.subTest(t=t):
-                self.assertFalse(_has_separate_coordinates(t))
+                self.assertTrue(_has_following_lines(t))
 
 
 class TestClassify(unittest.TestCase):
@@ -225,23 +231,19 @@ class TestClassifyWithSampleData(unittest.TestCase):
                     )
 
     def test_no_modification_history_in_output(self):
-        """出力に修正履歴レコードが含まれない"""
+        """図郭・H行・E行に修正履歴レコードが含まれない"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
                 result = classify(read_records(dm_path))
-                # 図郭レコードをチェック
                 for rec in result.map_sheet_records:
                     self.assertFalse(
                         _is_modification_history(rec),
                         f"修正履歴が図郭に含まれている: {rec[:20]}",
                     )
-                # 要素グループをチェック
                 for group in result.element_groups:
                     self.assertFalse(_is_modification_history(group.header))
                     for elem in group.elements:
                         self.assertFalse(_is_modification_history(elem.record))
-                        for coord in elem.coordinate_lines:
-                            self.assertFalse(_is_modification_history(coord))
 
 
 if __name__ == "__main__":
