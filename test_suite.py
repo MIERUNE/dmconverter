@@ -67,7 +67,10 @@ def test_package(package="plugin_dir"):
     """
     test_loader = unittest.defaultTestLoader
     try:
-        test_suite = test_loader.discover(package)
+        test_suite = test_loader.discover(
+            os.path.join(package, "tests"),
+            top_level_dir=package,
+        )
     except ImportError:
         test_suite = unittest.TestSuite()
     _run_tests(test_suite, package)
@@ -77,7 +80,10 @@ def test_environment():
     """Test package with an environment variable."""
     package = os.environ.get("TESTING_PACKAGE", "plugin_dir")
     test_loader = unittest.defaultTestLoader
-    test_suite = test_loader.discover(package)
+    test_suite = test_loader.discover(
+        os.path.join(package, "tests"),
+        top_level_dir=package,
+    )
     _run_tests(test_suite, package)
 
 
