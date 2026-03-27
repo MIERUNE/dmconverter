@@ -16,7 +16,6 @@ from core.dmconverter.parser.models import (
     ParsedGroup,
 )
 
-
 # ---------------------------------------------------------------------------
 # ヘルパー関数
 # ---------------------------------------------------------------------------
@@ -174,10 +173,6 @@ def _parse_direction_element(
     return _parse_line_area_element(record, coord_lines)
 
 
-# ---------------------------------------------------------------------------
-# グループパーサー + 公開API
-# ---------------------------------------------------------------------------
-
 _COORD_LINE_PARSERS = {
     "1": _parse_line_area_element,
     "2": _parse_line_area_element,
@@ -268,7 +263,5 @@ def parse(classified: ClassifiedRecords) -> ParsedDM:
         ParsedDM: 解析済みDMデータ
     """
     index = _parse_index(classified.index_records)
-    groups = tuple(
-        _parse_element_group(group) for group in classified.element_groups
-    )
+    groups = tuple(_parse_element_group(group) for group in classified.element_groups)
     return ParsedDM(index=index, groups=groups)
