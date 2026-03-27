@@ -22,22 +22,22 @@ SAMPLE_DM_FILES = [
 class TestIsModificationHistory(unittest.TestCase):
     def test_position_79_digit_returns_true(self):
         """位置79が"1"-"9"なら修正履歴"""
-        record = " " * 79 + "1"
+        record = b" " * 79 + b"1"
         self.assertTrue(_is_modification_history(record))
 
     def test_position_79_space_returns_false(self):
         """位置79がスペースなら修正履歴でない"""
-        record = " " * 79 + " "
+        record = b" " * 79 + b" "
         self.assertFalse(_is_modification_history(record))
 
     def test_position_79_zero_returns_false(self):
         """位置79が"0"なら修正履歴でない"""
-        record = " " * 79 + "0"
+        record = b" " * 79 + b"0"
         self.assertFalse(_is_modification_history(record))
 
     def test_short_record_returns_false(self):
         """80文字未満のレコードは修正履歴でない"""
-        record = " " * 50
+        record = b" " * 50
         self.assertFalse(_is_modification_history(record))
 
 
@@ -46,54 +46,54 @@ class TestIsElementPrefix(unittest.TestCase):
         """E1-E8を正しく判定する"""
         for i in range(1, 9):
             with self.subTest(i=i):
-                self.assertTrue(_is_element_prefix(f"E{i}2101"))
+                self.assertTrue(_is_element_prefix(f"E{i}2101".encode()))
 
     def test_e0_returns_false(self):
         """E0は要素レコードでない"""
-        self.assertFalse(_is_element_prefix("E02101"))
+        self.assertFalse(_is_element_prefix(b"E02101"))
 
     def test_e9_returns_false(self):
         """E9は要素レコードでない"""
-        self.assertFalse(_is_element_prefix("E92101"))
+        self.assertFalse(_is_element_prefix(b"E92101"))
 
     def test_short_string_returns_false(self):
         """1文字のレコードは要素レコードでない"""
-        self.assertFalse(_is_element_prefix("E"))
+        self.assertFalse(_is_element_prefix(b"E"))
 
 
 class TestIsHeaderPrefix(unittest.TestCase):
     def test_header_record(self):
-        self.assertTrue(_is_header_prefix("H 2100"))
+        self.assertTrue(_is_header_prefix(b"H 2100"))
 
     def test_non_header(self):
-        self.assertFalse(_is_header_prefix("E22101"))
+        self.assertFalse(_is_header_prefix(b"E22101"))
 
 
 class TestIsSkipPrefix(unittest.TestCase):
     def test_grid_record(self):
-        self.assertTrue(_is_skip_prefix("G 0001"))
+        self.assertTrue(_is_skip_prefix(b"G 0001"))
 
     def test_tin_record(self):
-        self.assertTrue(_is_skip_prefix("T 0001"))
+        self.assertTrue(_is_skip_prefix(b"T 0001"))
 
     def test_non_skip(self):
-        self.assertFalse(_is_skip_prefix("H 2100"))
+        self.assertFalse(_is_skip_prefix(b"H 2100"))
 
 
 class TestHasFollowingLines(unittest.TestCase):
     def test_e1_to_e4_have_following_lines(self):
         """E1-E4は後続の座標行を持つ"""
-        for t in "1234":
+        for t in b"1234":
             with self.subTest(t=t):
                 self.assertTrue(_has_following_lines(t))
 
     def test_e5_has_no_following_lines(self):
         """E5は座標がE行に埋め込まれているため後続行なし"""
-        self.assertFalse(_has_following_lines("5"))
+        self.assertFalse(_has_following_lines(ord(b"5")))
 
     def test_e6_to_e8_have_following_lines(self):
         """E6は座標行、E7/E8は注記データ行を持つ"""
-        for t in "678":
+        for t in b"678":
             with self.subTest(t=t):
                 self.assertTrue(_has_following_lines(t))
 
@@ -102,40 +102,40 @@ class TestClassify(unittest.TestCase):
     def test_too_few_records_raises_value_error(self):
         """3行未満のレコードでValueErrorが発生する"""
         with self.assertRaises(ValueError):
-            classify(iter(["line1", "line2"]))
+            classify(iter([b"line1", b"line2"]))
 
     def test_index_records_count(self):
         """インデックスレコードが3つ返される"""
-        records = ["idx1", "idx2", "idx3"]
+        records = [b"idx1", b"idx2", b"idx3"]
         result = classify(iter(records))
         self.assertEqual(len(result.index_records), 3)
 
     def test_map_sheet_collected_until_header(self):
         """H行が来るまでを図郭レコードとして収集する"""
         records = [
-            "M index_a",
-            "  index_b",
-            "  index_c",
-            "sheet_line_1",
-            "sheet_line_2",
-            "H 2100 header",
-            "E22101 element",
+            b"M index_a",
+            b"  index_b",
+            b"  index_c",
+            b"sheet_line_1",
+            b"sheet_line_2",
+            b"H 2100 header",
+            b"E22101 element",
         ]
         result = classify(iter(records))
         self.assertEqual(len(result.map_sheet_records), 2)
-        self.assertEqual(result.map_sheet_records[0], "sheet_line_1")
+        self.assertEqual(result.map_sheet_records[0], b"sheet_line_1")
 
     def test_element_group_structure(self):
         """H + E の構造が ElementGroup として返される"""
         records = [
-            "idx_a",
-            "idx_b",
-            "idx_c",
-            "H 2100 header1",
-            "E52101 point_element",
-            "E52102 point_element2",
-            "H 3000 header2",
-            "E73001 annotation",
+            b"idx_a",
+            b"idx_b",
+            b"idx_c",
+            b"H 2100 header1",
+            b"E52101 point_element",
+            b"E52102 point_element2",
+            b"H 3000 header2",
+            b"E73001 annotation",
         ]
         result = classify(iter(records))
         self.assertEqual(len(result.element_groups), 2)
@@ -145,13 +145,13 @@ class TestClassify(unittest.TestCase):
     def test_e2_has_coordinate_lines(self):
         """E2要素の後続行が座標行として収集される"""
         records = [
-            "idx_a",
-            "idx_b",
-            "idx_c",
-            "H 2100 header",
-            "E22101 line_element",
-            "1106380 6343101106470 6324501106590 6297801105640 625000",
-            "1098860 6134201097140 6079701096700 6026601096980 600070",
+            b"idx_a",
+            b"idx_b",
+            b"idx_c",
+            b"H 2100 header",
+            b"E22101 line_element",
+            b"1106380 6343101106470 6324501106590 6297801105640 625000",
+            b"1098860 6134201097140 6079701096700 6026601096980 600070",
         ]
         result = classify(iter(records))
         elem = result.element_groups[0].elements[0]
@@ -160,11 +160,11 @@ class TestClassify(unittest.TestCase):
     def test_e5_has_no_coordinate_lines(self):
         """E5要素は座標行を持たない"""
         records = [
-            "idx_a",
-            "idx_b",
-            "idx_c",
-            "H 2100 header",
-            "E52101 point_element",
+            b"idx_a",
+            b"idx_b",
+            b"idx_c",
+            b"H 2100 header",
+            b"E52101 point_element",
         ]
         result = classify(iter(records))
         elem = result.element_groups[0].elements[0]
@@ -173,14 +173,14 @@ class TestClassify(unittest.TestCase):
     def test_modification_history_skipped(self):
         """修正履歴レコードが出力に含まれない"""
         # 位置79に"1"を持つレコード
-        history = " " * 79 + "1"
+        history = b" " * 79 + b"1"
         records = [
-            "idx_a",
-            "idx_b",
-            "idx_c",
+            b"idx_a",
+            b"idx_b",
+            b"idx_c",
             history,  # 図郭フェーズでスキップされるべき
-            "H 2100 header",
-            "E52101 point_element",
+            b"H 2100 header",
+            b"E52101 point_element",
         ]
         result = classify(iter(records))
         self.assertEqual(len(result.map_sheet_records), 0)
@@ -188,13 +188,13 @@ class TestClassify(unittest.TestCase):
     def test_g_and_t_records_skipped(self):
         """G/Tレコードがスキップされる"""
         records = [
-            "idx_a",
-            "idx_b",
-            "idx_c",
-            "H 2100 header",
-            "G grid_record",
-            "T tin_record",
-            "E52101 point_element",
+            b"idx_a",
+            b"idx_b",
+            b"idx_c",
+            b"H 2100 header",
+            b"G grid_record",
+            b"T tin_record",
+            b"E52101 point_element",
         ]
         result = classify(iter(records))
         self.assertEqual(len(result.element_groups[0].elements), 1)
@@ -213,7 +213,7 @@ class TestClassifyWithSampleData(unittest.TestCase):
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
                 result = classify(read_records(dm_path))
-                self.assertTrue(result.index_records[0].startswith("M "))
+                self.assertTrue(result.index_records[0].startswith(b"M "))
 
     def test_map_sheet_records_not_empty(self):
         """図郭レコードが空でない"""
@@ -236,7 +236,7 @@ class TestClassifyWithSampleData(unittest.TestCase):
                 result = classify(read_records(dm_path))
                 for group in result.element_groups:
                     self.assertTrue(
-                        group.header.startswith("H "),
+                        group.header.startswith(b"H "),
                         f"ヘッダーが'H 'で始まらない: {group.header[:20]}",
                     )
 
