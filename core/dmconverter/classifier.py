@@ -27,15 +27,15 @@ class RecordType(enum.Enum):
 class ElementRecord:
     """要素レコード（E行 + 後続の座標行）"""
 
-    record: str
-    coordinate_lines: tuple[str, ...]
+    record: bytes
+    coordinate_lines: tuple[bytes, ...]
 
 
 @dataclass(frozen=True)
 class ElementGroup:
     """グループヘッダ＋配下の要素レコード"""
 
-    header: str
+    header: bytes
     elements: tuple[ElementRecord, ...]
 
 
@@ -43,38 +43,38 @@ class ElementGroup:
 class ClassifiedRecords:
     """分類済みレコード群"""
 
-    index_records: tuple[str, str, str]
-    map_sheet_records: tuple[str, ...]
+    index_records: tuple[bytes, bytes, bytes]
+    map_sheet_records: tuple[bytes, ...]
     element_groups: tuple[ElementGroup, ...]
 
 
-def _is_modification_history(record: str) -> bool:
+def _is_modification_history(record: bytes) -> bool:
     """修正履歴レコードか判定する。
     位置79（0始点）が "1"-"9" なら修正履歴レコード。
     """
     if len(record) <= HISTORY_POSITION:
         return False
-    return record[HISTORY_POSITION] in "123456789"
+    return ord(b"1") <= record[HISTORY_POSITION] <= ord(b"9")
 
 
-def _is_element_prefix(record: str) -> bool:
+def _is_element_prefix(record: bytes) -> bool:
     """Eレコード（E1-E8）か判定する。"""
     if len(record) < 2:
         return False
-    return record[0] == "E" and record[1] in "12345678"
+    return record[0:1] == b"E" and ord(b"1") <= record[1] <= ord(b"8")
 
 
-def _is_header_prefix(record: str) -> bool:
+def _is_header_prefix(record: bytes) -> bool:
     """Hレコードか判定する。"""
-    return record.startswith("H ")
+    return record.startswith(b"H ")
 
 
-def _is_skip_prefix(record: str) -> bool:
+def _is_skip_prefix(record: bytes) -> bool:
     """G/Tレコード（対応外）か判定する。"""
-    return record.startswith("G ") or record.startswith("T ")
+    return record.startswith(b"G ") or record.startswith(b"T ")
 
 
-def _has_following_lines(element_type: str) -> bool:
+def _has_following_lines(element_type: int) -> bool:
     """後続行を持つ要素タイプか判定する。
 
     E1-E4: 後続行に座標データを持つ。
@@ -82,10 +82,10 @@ def _has_following_lines(element_type: str) -> bool:
     E6:    後続行に座標データを持つ。
     E7/E8: 後続行に注記・属性データを持つ。
     """
-    return element_type in "1234678"
+    return element_type in b"1234678"
 
 
-def classify(records: Iterator[str]) -> ClassifiedRecords:
+def classify(records: Iterator[bytes]) -> ClassifiedRecords:
     """レコード列を分類し、構造化して返す。
 
     3フェーズで処理する:
@@ -110,7 +110,7 @@ def classify(records: Iterator[str]) -> ClassifiedRecords:
     index_records = (record_list[0], record_list[1], record_list[2])
 
     # --- Phase 2: 図郭レコード（H/Eが出現するまで） ---
-    map_sheet_lines: list[str] = []
+    map_sheet_lines: list[bytes] = []
     pos = INDEX_RECORD_COUNT
 
     while pos < len(record_list):
@@ -123,7 +123,7 @@ def classify(records: Iterator[str]) -> ClassifiedRecords:
 
     # --- Phase 3: 要素グループ（H + E + 座標行） ---
     element_groups: list[ElementGroup] = []
-    current_header: str | None = None
+    current_header: bytes | None = None
     current_elements: list[ElementRecord] = []
 
     while pos < len(record_list):
@@ -171,7 +171,7 @@ def classify(records: Iterator[str]) -> ClassifiedRecords:
             if _has_following_lines(element_type):
                 # 後続行（座標行/注記行）を収集
                 # 座標行は84バイト全体がデータなので修正履歴チェックは行わない
-                coord_lines: list[str] = []
+                coord_lines: list[bytes] = []
                 pos += 1
                 while pos < len(record_list):
                     next_record = record_list[pos]
