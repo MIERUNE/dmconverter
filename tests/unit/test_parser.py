@@ -3,11 +3,15 @@ import unittest
 
 from core.dmconverter.classifier import classify
 from core.dmconverter.parser.models import (
+    AnnotationInfo,
+    AttributeInfo,
     Coordinate,
     ParsedDM,
 )
 from core.dmconverter.parser.parser import (
     _extract_common_fields,
+    _parse_annotation_element,
+    _parse_attribute_element,
     _parse_coordinate_line_2d,
     _parse_coordinate_line_3d,
     _parse_index,
@@ -215,6 +219,92 @@ class TestParseWithSampleData(unittest.TestCase):
                                 0,
                                 "E6要素の座標が空",
                             )
+
+
+class TestParseAnnotationElement(unittest.TestCase):
+    def test_e7_coordinates(self):
+        """E7要素の代表点座標を正しく解析する"""
+        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        annotation_line = "0    -28   15    0 4410                                                             "
+        elem = _parse_annotation_element(record, (annotation_line,))
+        self.assertEqual(elem.element_type, "E7")
+        self.assertEqual(elem.dm_code, "7101")
+        self.assertEqual(len(elem.coordinates), 1)
+        self.assertEqual(elem.coordinates[0].x, 1079383)
+        self.assertEqual(elem.coordinates[0].y, 996705)
+
+    def test_e7_annotation_info(self):
+        """E7要素の注記情報を正しく解析する"""
+        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        annotation_line = "0    -28   15    0 4410                                                             "
+        elem = _parse_annotation_element(record, (annotation_line,))
+        self.assertIsNotNone(elem.annotation)
+        self.assertEqual(elem.annotation.orientation, 0)
+        self.assertEqual(elem.annotation.angle, -28)
+        self.assertEqual(elem.annotation.size, 15)
+        self.assertEqual(elem.annotation.spacing, 0)
+        self.assertEqual(elem.annotation.line_weight, 4)
+        self.assertEqual(elem.annotation.text, "410")
+
+    def test_e7_no_annotation_lines(self):
+        """後続行がない場合、annotationはNone"""
+        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        elem = _parse_annotation_element(record, ())
+        self.assertIsNone(elem.annotation)
+        self.assertEqual(len(elem.coordinates), 1)
+
+
+class TestParseAttributeElement(unittest.TestCase):
+    def test_e8_coordinates(self):
+        """E8要素の代表点座標を正しく解析する"""
+        record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
+        attribute_line = "12345                                                                               "
+        elem = _parse_attribute_element(record, (attribute_line,))
+        self.assertEqual(elem.element_type, "E8")
+        self.assertEqual(len(elem.coordinates), 1)
+        self.assertEqual(elem.coordinates[0].x, 500000)
+        self.assertEqual(elem.coordinates[0].y, 600000)
+
+    def test_e8_attribute_data(self):
+        """E8要素の属性データを正しく解析する"""
+        record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
+        attribute_line = "12345                                                                               "
+        elem = _parse_attribute_element(record, (attribute_line,))
+        self.assertIsNotNone(elem.attribute)
+        self.assertEqual(elem.attribute.data, "12345")
+
+    def test_e8_no_attribute_lines(self):
+        """後続行がない場合、attributeはNone"""
+        record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
+        elem = _parse_attribute_element(record, ())
+        self.assertIsNone(elem.attribute)
+
+
+class TestParseE7WithSampleData(unittest.TestCase):
+    def test_e7_elements_have_coordinates_and_annotation(self):
+        """サンプルデータのE7要素が座標と注記情報を持つ"""
+        dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm (437 E7)
+        result = parse(classify(read_records(dm_path)))
+        e7_count = 0
+        for group in result.groups:
+            for elem in group.elements:
+                if elem.element_type == "E7":
+                    e7_count += 1
+                    self.assertEqual(
+                        len(elem.coordinates),
+                        1,
+                        "E7要素の座標が1つでない",
+                    )
+                    self.assertIsNotNone(
+                        elem.annotation,
+                        "E7要素のannotationがNone",
+                    )
+                    self.assertGreater(
+                        len(elem.annotation.text),
+                        0,
+                        "E7要素の注記テキストが空",
+                    )
+        self.assertGreater(e7_count, 0, "E7要素が見つからない")
 
 
 if __name__ == "__main__":
