@@ -39,9 +39,7 @@ def _detect_encoding(path: str) -> str:
         raw.decode("cp932")
         return "cp932"
     except UnicodeDecodeError:
-        raise ValueError(
-            f"エンコーディングを判定できません: {path}"
-        )
+        raise ValueError(f"エンコーディングを判定できません: {path}")
 
 
 def read_records(path: str) -> Iterator[str]:
