@@ -12,6 +12,7 @@ from core.dmconverter.parser.models import (
     AttributeInfo,
     Coordinate,
     IndexInfo,
+    MapSheetInfo,
     ParsedDM,
     ParsedElement,
     ParsedGroup,
@@ -337,6 +338,39 @@ def _parse_index(
     )
 
 
+# geometry.py対応時に追加
+def _parse_map_sheet(
+    index_records: tuple[bytes, bytes, bytes],
+) -> MapSheetInfo:
+    """図郭レコード(b)からMapSheetInfoを抽出する。
+
+    classifierでは先頭3行をindex_recordsとして格納しており、
+    図郭レコード(a)(b)(c)がそれぞれindex_records[0][1][2]に対応する。
+
+    図郭レコード(b)のフィールド定義（0始点バイト位置）:
+        0-6:   左下図郭座標 X (I7, メートル)
+        7-13:  左下図郭座標 Y (I7, メートル)
+        14-20: 右上図郭座標 X (I7, メートル)
+        21-27: 右上図郭座標 Y (I7, メートル)
+        44-46: 座標値の単位 (I3)
+    """
+    record = index_records[1]
+
+    origin_x = _safe_int(record[0:7])
+    origin_y = _safe_int(record[7:14])
+    upper_x = _safe_int(record[14:21])
+    upper_y = _safe_int(record[21:28])
+    coord_unit = _safe_int(record[44:47])
+
+    return MapSheetInfo(
+        origin_x=origin_x,
+        origin_y=origin_y,
+        upper_x=upper_x,
+        upper_y=upper_y,
+        coord_unit=coord_unit,
+    )
+
+
 def parse(classified: ClassifiedRecords, encoding: str = "utf-8") -> ParsedDM:
     """分類済みレコードを解析し、構造化データとして返す。
 
@@ -348,8 +382,9 @@ def parse(classified: ClassifiedRecords, encoding: str = "utf-8") -> ParsedDM:
         ParsedDM: 解析済みDMデータ
     """
     index = _parse_index(classified.index_records, encoding)
+    map_sheet = _parse_map_sheet(classified.index_records)
     groups = tuple(
         _parse_element_group(group, encoding)
         for group in classified.element_groups
     )
-    return ParsedDM(index=index, groups=groups)
+    return ParsedDM(index=index, map_sheet=map_sheet, groups=groups)

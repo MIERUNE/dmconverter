@@ -70,8 +70,20 @@ class IndexInfo:
 
 
 @dataclass(frozen=True)
+class MapSheetInfo:
+    """図郭情報（図郭レコード(b)から取得）"""
+
+    origin_x: int  # 左下図郭座標 X (メートル)
+    origin_y: int  # 左下図郭座標 Y (メートル)
+    upper_x: int  # 右上図郭座標 X (メートル)
+    upper_y: int  # 右上図郭座標 Y (メートル)
+    coord_unit: int  # 座標値の単位 (1=mm, 10=cm, 999=m)
+
+
+@dataclass(frozen=True)
 class ParsedDM:
     """解析済みDMデータ（parserの最終出力）"""
 
     index: IndexInfo
+    map_sheet: MapSheetInfo
     groups: tuple[ParsedGroup, ...]

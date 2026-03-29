@@ -15,6 +15,7 @@ from core.dmconverter.parser.parser import (
     _parse_coordinate_line_2d,
     _parse_coordinate_line_3d,
     _parse_index,
+    _parse_map_sheet,
     _parse_point_element,
     _safe_int,
     parse,
@@ -312,6 +313,27 @@ class TestParseE7WithSampleData(unittest.TestCase):
                         "E7要素の注記テキストが空",
                     )
         self.assertGreater(e7_count, 0, "E7要素が見つからない")
+
+
+class TestParseMapSheet(unittest.TestCase):
+    def test_map_sheet_from_sample(self):
+        """サンプルデータから図郭情報を正しく抽出する"""
+        dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm
+        classified = classify(read_records(dm_path))
+        info = _parse_map_sheet(classified.index_records)
+        # 左下 < 右上 であること
+        self.assertLess(info.origin_x, info.upper_x)
+        self.assertLess(info.origin_y, info.upper_y)
+        # 座標値の単位が有効な値
+        self.assertIn(info.coord_unit, (1, 10, 999))
+
+    def test_parsed_dm_has_map_sheet(self):
+        """ParsedDMにmap_sheetが含まれる"""
+        dm_path = SAMPLE_DM_FILES[0]
+        encoding = detect_encoding(dm_path)
+        result = parse(classify(read_records(dm_path)), encoding)
+        self.assertIsNotNone(result.map_sheet)
+        self.assertGreater(result.map_sheet.origin_x, 0)
 
 
 if __name__ == "__main__":
