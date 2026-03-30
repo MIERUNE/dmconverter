@@ -124,12 +124,12 @@ class TestParsePointElement(unittest.TestCase):
 
 class TestParseIndex(unittest.TestCase):
     def test_coordinate_system(self):
-        """インデックスレコードから座標系番号を抽出する"""
+        """Mレコードから座標系番号を抽出する"""
         dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm
         encoding = detect_encoding(dm_path)
         records = list(read_records(dm_path))
-        index_records = (records[0], records[1], records[2])
-        info = _parse_index(index_records, encoding)
+        mesh_rows = tuple(records[:3])
+        info = _parse_index(mesh_rows, encoding)
         self.assertEqual(info.coordinate_system, 2)
         self.assertEqual(info.scale, 1000)
 
@@ -320,7 +320,7 @@ class TestParseMapSheet(unittest.TestCase):
         """サンプルデータから図郭情報を正しく抽出する"""
         dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm
         classified = classify(read_records(dm_path))
-        info = _parse_map_sheet(classified.index_records)
+        info = _parse_map_sheet(classified.mesh_rows)
         # 左下 < 右上 であること
         self.assertLess(info.origin_x, info.upper_x)
         self.assertLess(info.origin_y, info.upper_y)

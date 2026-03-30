@@ -6,8 +6,9 @@ from core.dmconverter.classifier import (
     _has_following_lines,
     _is_element_prefix,
     _is_header_prefix,
-    _is_modification_history,
     _is_skip_prefix,
+    _get_revision_count,
+    _calc_mesh_row_count,
     classify,
 )
 from core.dmconverter.reader import read_records
@@ -59,26 +60,35 @@ def _find_records():
 _IDX = _find_records()
 
 
-class TestIsModificationHistory(unittest.TestCase):
-    def test_position_79_digit_returns_true(self):
-        """位置79が"1"-"9"なら修正履歴"""
-        record = (b" " * 79 + b"1").ljust(84)
-        self.assertTrue(_is_modification_history(record))
+class TestGetRevisionCount(unittest.TestCase):
+    def test_zero_revision(self):
+        """修正回数0（新規作成）"""
+        record = b"M " + b" " * 63 + b" 0" + b" " * 17
+        self.assertEqual(_get_revision_count(record), 0)
 
-    def test_position_79_space_returns_false(self):
-        """位置79がスペースなら修正履歴でない"""
-        record = (b" " * 79 + b" ").ljust(84)
-        self.assertFalse(_is_modification_history(record))
+    def test_one_revision(self):
+        """修正回数1"""
+        record = b"M " + b" " * 63 + b" 1" + b" " * 17
+        self.assertEqual(_get_revision_count(record), 1)
 
-    def test_position_79_zero_returns_false(self):
-        """位置79が"0"なら修正履歴でない"""
-        record = (b" " * 79 + b"0").ljust(84)
-        self.assertFalse(_is_modification_history(record))
+    def test_sample_data_revision_count(self):
+        """サンプルデータから修正回数を取得する"""
+        count = _get_revision_count(_SAMPLE_RECORDS[0])
+        self.assertGreaterEqual(count, 0)
 
-    def test_short_record_returns_false(self):
-        """80バイト未満のレコードは修正履歴でない"""
-        record = b" " * 50
-        self.assertFalse(_is_modification_history(record))
+
+class TestCalcMeshRowCount(unittest.TestCase):
+    def test_zero_revision(self):
+        """修正回数0: 3 + 3×1 = 6行"""
+        self.assertEqual(_calc_mesh_row_count(0), 6)
+
+    def test_one_revision(self):
+        """修正回数1: 3 + 3×2 = 9行"""
+        self.assertEqual(_calc_mesh_row_count(1), 9)
+
+    def test_two_revisions(self):
+        """修正回数2: 3 + 3×3 = 12行"""
+        self.assertEqual(_calc_mesh_row_count(2), 12)
 
 
 class TestIsElementPrefix(unittest.TestCase):
@@ -150,30 +160,27 @@ class TestClassify(unittest.TestCase):
         with self.assertRaises(ValueError):
             classify(iter(_SAMPLE_RECORDS[:2]))
 
-    def test_index_records_count(self):
-        """インデックスレコードが3つ返される"""
-        result = classify(iter(_SAMPLE_RECORDS[:3]))
-        self.assertEqual(len(result.index_records), 3)
+    def test_mesh_rows_count(self):
+        """Mレコード行数が修正回数に基づいて正しく収集される"""
+        result = classify(iter(_SAMPLE_RECORDS))
+        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
+        expected = _calc_mesh_row_count(revision_count)
+        self.assertEqual(len(result.mesh_rows), expected)
 
-    def test_map_sheet_collected_until_header(self):
-        """H行が来るまでを図郭レコードとして収集する"""
-        # 実データ: index(3行) + 図郭行 + H行 + E行
-        h_idx = _IDX["first_h"]
-        e2_idx = _IDX["first_e2"]
-        records = _SAMPLE_RECORDS[: e2_idx + 1]
-        result = classify(iter(records))
-        # index 3行の後、H行の前までが図郭レコード
-        expected_map_sheet_count = h_idx - 3
-        self.assertEqual(len(result.map_sheet_records), expected_map_sheet_count)
+    def test_mesh_rows_first_starts_with_m(self):
+        """Mレコードの先頭が"M "で始まる"""
+        result = classify(iter(_SAMPLE_RECORDS))
+        self.assertTrue(result.mesh_rows[0].startswith(b"M "))
 
     def test_element_group_structure(self):
         """H + E の構造が ElementGroup として返される"""
         h1 = _IDX["first_h"]
         h2 = _IDX["second_h"]
-        # H1 + 配下要素 + H2 + 配下要素の範囲を切り出す
-        # H2の次のH or ファイル末尾までを含める
+        # Mレコード全行 + H1 + 配下要素 + H2 + 配下要素の範囲を切り出す
+        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
+        mesh_count = _calc_mesh_row_count(revision_count)
         end = h2 + 2  # H2 + 最低1要素
-        records = _SAMPLE_RECORDS[:3] + _SAMPLE_RECORDS[h1:end]
+        records = _SAMPLE_RECORDS[:mesh_count] + _SAMPLE_RECORDS[h1:end]
         result = classify(iter(records))
         self.assertGreaterEqual(len(result.element_groups), 2)
         self.assertGreater(len(result.element_groups[0].elements), 0)
@@ -184,7 +191,9 @@ class TestClassify(unittest.TestCase):
         e2_idx = _IDX["first_e2"]
         coord_indices = _IDX["e2_coord_indices"]
         last_coord = coord_indices[-1]
-        records = _SAMPLE_RECORDS[:3] + [_SAMPLE_RECORDS[h_idx]] + _SAMPLE_RECORDS[e2_idx : last_coord + 1]
+        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
+        mesh_count = _calc_mesh_row_count(revision_count)
+        records = _SAMPLE_RECORDS[:mesh_count] + [_SAMPLE_RECORDS[h_idx]] + _SAMPLE_RECORDS[e2_idx : last_coord + 1]
         result = classify(iter(records))
         elem = result.element_groups[0].elements[0]
         self.assertEqual(len(elem.coordinate_lines), len(coord_indices))
@@ -193,21 +202,12 @@ class TestClassify(unittest.TestCase):
         """E5要素は座標行を持たない"""
         h_idx = _IDX["first_h"]
         e5_idx = _IDX["first_e5"]
-        records = _SAMPLE_RECORDS[:3] + [_SAMPLE_RECORDS[h_idx], _SAMPLE_RECORDS[e5_idx]]
+        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
+        mesh_count = _calc_mesh_row_count(revision_count)
+        records = _SAMPLE_RECORDS[:mesh_count] + [_SAMPLE_RECORDS[h_idx], _SAMPLE_RECORDS[e5_idx]]
         result = classify(iter(records))
         elem = result.element_groups[0].elements[0]
         self.assertEqual(elem.coordinate_lines, ())
-
-    def test_modification_history_skipped(self):
-        """修正履歴レコードが出力に含まれない"""
-        h_idx = _IDX["first_h"]
-        e5_idx = _IDX["first_e5"]
-        # 実レコードの79バイト目を"1"に書き換えて修正履歴レコードを作る
-        history = bytearray(_SAMPLE_RECORDS[3])
-        history[79] = ord(b"1")
-        records = _SAMPLE_RECORDS[:3] + [bytes(history), _SAMPLE_RECORDS[h_idx], _SAMPLE_RECORDS[e5_idx]]
-        result = classify(iter(records))
-        self.assertEqual(len(result.map_sheet_records), 0)
 
     def test_g_and_t_records_skipped(self):
         """G/Tレコードがスキップされる"""
@@ -215,7 +215,9 @@ class TestClassify(unittest.TestCase):
         e5_idx = _IDX["first_e5"]
         g_record = b"G ".ljust(84)
         t_record = b"T ".ljust(84)
-        records = _SAMPLE_RECORDS[:3] + [
+        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
+        mesh_count = _calc_mesh_row_count(revision_count)
+        records = _SAMPLE_RECORDS[:mesh_count] + [
             _SAMPLE_RECORDS[h_idx],
             g_record,
             t_record,
@@ -233,19 +235,22 @@ class TestClassifyWithSampleData(unittest.TestCase):
                 result = classify(read_records(dm_path))
                 self.assertIsInstance(result, ClassifiedRecords)
 
-    def test_index_records_first_starts_with_m(self):
-        """インデックスレコードの先頭が"M "で始まる"""
+    def test_mesh_rows_first_starts_with_m(self):
+        """Mレコードの先頭が"M "で始まる"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
                 result = classify(read_records(dm_path))
-                self.assertTrue(result.index_records[0].startswith(b"M "))
+                self.assertTrue(result.mesh_rows[0].startswith(b"M "))
 
-    def test_map_sheet_records_not_empty(self):
-        """図郭レコードが空でない"""
+    def test_mesh_rows_dynamic_count(self):
+        """Mレコード行数が修正回数に基づく"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = classify(read_records(dm_path))
-                self.assertGreater(len(result.map_sheet_records), 0)
+                records = list(read_records(dm_path))
+                result = classify(iter(records))
+                revision_count = _get_revision_count(records[0])
+                expected = _calc_mesh_row_count(revision_count)
+                self.assertEqual(len(result.mesh_rows), expected)
 
     def test_element_groups_not_empty(self):
         """要素グループが空でない"""
@@ -264,21 +269,6 @@ class TestClassifyWithSampleData(unittest.TestCase):
                         group.header.startswith(b"H "),
                         f"ヘッダーが'H 'で始まらない: {group.header[:20]}",
                     )
-
-    def test_no_modification_history_in_output(self):
-        """図郭・H行・E行に修正履歴レコードが含まれない"""
-        for dm_path in SAMPLE_DM_FILES:
-            with self.subTest(dm_path=dm_path):
-                result = classify(read_records(dm_path))
-                for rec in result.map_sheet_records:
-                    self.assertFalse(
-                        _is_modification_history(rec),
-                        f"修正履歴が図郭に含まれている: {rec[:20]}",
-                    )
-                for group in result.element_groups:
-                    self.assertFalse(_is_modification_history(group.header))
-                    for elem in group.elements:
-                        self.assertFalse(_is_modification_history(elem.record))
 
 
 if __name__ == "__main__":

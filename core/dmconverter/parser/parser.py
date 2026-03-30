@@ -308,9 +308,9 @@ def _parse_element_group(group: ElementGroup, encoding: str) -> ParsedGroup:
 
 
 def _parse_index(
-    index_records: tuple[bytes, bytes, bytes], encoding: str
+    mesh_rows: tuple[bytes, ...], encoding: str
 ) -> IndexInfo:
-    """インデックスレコードからIndexInfoを抽出する。
+    """Mレコードの(a)行からIndexInfoを抽出する。
 
     図郭レコード(a)のフィールド定義（0始点バイト位置）:
         0-1:   レコードタイプ (A2) "M "
@@ -319,7 +319,7 @@ def _parse_index(
         30-34: 地図情報レベル (I5)
         35-64: タイトル名 (A30)
     """
-    line_a = index_records[0]
+    line_a = mesh_rows[0]
 
     # 図郭識別番号（A8）の先頭2文字が座標系番号（例: "02" → 系2）
     map_sheet_id = line_a[2:10].strip()
@@ -338,14 +338,12 @@ def _parse_index(
     )
 
 
-# geometry.py対応時に追加
 def _parse_map_sheet(
-    index_records: tuple[bytes, bytes, bytes],
+    mesh_rows: tuple[bytes, ...],
 ) -> MapSheetInfo:
-    """図郭レコード(b)からMapSheetInfoを抽出する。
+    """Mレコードの(b)行からMapSheetInfoを抽出する。
 
-    classifierでは先頭3行をindex_recordsとして格納しており、
-    図郭レコード(a)(b)(c)がそれぞれindex_records[0][1][2]に対応する。
+    mesh_rows[0]=(a), mesh_rows[1]=(b), mesh_rows[2]=(c) に対応する。
 
     図郭レコード(b)のフィールド定義（0始点バイト位置）:
         0-6:   左下図郭座標 X (I7, メートル)
@@ -354,7 +352,7 @@ def _parse_map_sheet(
         21-27: 右上図郭座標 Y (I7, メートル)
         44-46: 座標値の単位 (I3)
     """
-    record = index_records[1]
+    record = mesh_rows[1]
 
     origin_x = _safe_int(record[0:7])
     origin_y = _safe_int(record[7:14])
@@ -381,8 +379,8 @@ def parse(classified: ClassifiedRecords, encoding: str = "utf-8") -> ParsedDM:
     Returns:
         ParsedDM: 解析済みDMデータ
     """
-    index = _parse_index(classified.index_records, encoding)
-    map_sheet = _parse_map_sheet(classified.index_records)
+    index = _parse_index(classified.mesh_rows, encoding)
+    map_sheet = _parse_map_sheet(classified.mesh_rows)
     groups = tuple(
         _parse_element_group(group, encoding)
         for group in classified.element_groups
