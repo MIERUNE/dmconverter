@@ -10,6 +10,11 @@ from qgis.core import (
     QgsProcessingParameterFileDestination,
 )
 
+from core.dmconverter.classifier import classify
+from core.dmconverter.parser.parser import parse
+from core.dmconverter.reader import detect_encoding, read_records
+from core.dmconverter.writer import create_layers, save_to_geopackage
+
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     # パラメータの名前（内部で使うキー）
@@ -76,12 +81,28 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):
-        """「実行」ボタンを押したときに走る処理の本体
-
-        TODO: core/ の実装後にここから変換処理を呼び出す
-        """
+        """「実行」ボタンを押したときに走る処理の本体"""
+        input_file = self.parameterAsFile(parameters, self.INPUT_FILES, context)
         output_path = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
 
-        feedback.pushInfo("DM変換処理は未実装です")
+        if not input_file:
+            feedback.reportError("DMファイルを指定してください")
+            return {self.OUTPUT: output_path}
+
+        feedback.pushInfo(f"読み込み中: {input_file}")
+        encoding = detect_encoding(input_file)
+        classified = classify(read_records(input_file))
+        parsed = parse(classified, encoding)
+
+        feedback.pushInfo(
+            f"解析完了: {len(parsed.groups)}グループ, "
+            f"座標系{parsed.index.coordinate_system}"
+        )
+
+        layers = create_layers(parsed)
+        feedback.pushInfo(f"レイヤ作成完了: {len(layers)}レイヤ")
+
+        save_to_geopackage(layers, output_path)
+        feedback.pushInfo(f"GeoPackage出力完了: {output_path}")
 
         return {self.OUTPUT: output_path}
