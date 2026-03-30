@@ -193,7 +193,11 @@ class TestClassify(unittest.TestCase):
         last_coord = coord_indices[-1]
         revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
         mesh_count = _calc_mesh_row_count(revision_count)
-        records = _SAMPLE_RECORDS[:mesh_count] + [_SAMPLE_RECORDS[h_idx]] + _SAMPLE_RECORDS[e2_idx : last_coord + 1]
+        records = (
+            _SAMPLE_RECORDS[:mesh_count]
+            + [_SAMPLE_RECORDS[h_idx]]
+            + _SAMPLE_RECORDS[e2_idx : last_coord + 1]
+        )
         result = classify(iter(records))
         elem = result.element_groups[0].elements[0]
         self.assertEqual(len(elem.coordinate_lines), len(coord_indices))
@@ -204,7 +208,10 @@ class TestClassify(unittest.TestCase):
         e5_idx = _IDX["first_e5"]
         revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
         mesh_count = _calc_mesh_row_count(revision_count)
-        records = _SAMPLE_RECORDS[:mesh_count] + [_SAMPLE_RECORDS[h_idx], _SAMPLE_RECORDS[e5_idx]]
+        records = _SAMPLE_RECORDS[:mesh_count] + [
+            _SAMPLE_RECORDS[h_idx],
+            _SAMPLE_RECORDS[e5_idx],
+        ]
         result = classify(iter(records))
         elem = result.element_groups[0].elements[0]
         self.assertEqual(elem.coordinate_lines, ())
