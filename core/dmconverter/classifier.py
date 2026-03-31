@@ -1,7 +1,7 @@
 """レコード分離
 
 読み取ったレコードを分類・仕分けする。
-修正履歴レコード・G/Tレコードはスキップする。
+G/Tレコードはスキップする。
 """
 
 from __future__ import annotations
@@ -10,7 +10,11 @@ import enum
 from dataclasses import dataclass
 from typing import Iterator
 
-from core.dmconverter.constants import HISTORY_POSITION, INDEX_RECORD_COUNT
+from core.dmconverter.constants import (
+    MESH_BASE_ROWS,
+    MESH_HISTORY_SET_ROWS,
+    REVISION_COUNT_POSITION,
+)
 
 
 class RecordType(enum.Enum):
@@ -43,18 +47,8 @@ class ElementGroup:
 class ClassifiedRecords:
     """分類済みレコード群"""
 
-    index_records: tuple[bytes, bytes, bytes]
-    map_sheet_records: tuple[bytes, ...]
+    mesh_rows: tuple[bytes, ...]
     element_groups: tuple[ElementGroup, ...]
-
-
-def _is_modification_history(record: bytes) -> bool:
-    """修正履歴レコードか判定する。
-    位置79（0始点）が "1"-"9" なら修正履歴レコード。
-    """
-    if len(record) <= HISTORY_POSITION:
-        return False
-    return ord(b"1") <= record[HISTORY_POSITION] <= ord(b"9")
 
 
 def _is_element_prefix(record: bytes) -> bool:
@@ -85,43 +79,63 @@ def _has_following_lines(element_type: int) -> bool:
     return element_type in b"1234678"
 
 
+def _get_revision_count(mesh_row_a: bytes) -> int:
+    """図郭レコード(a)から修正回数を取得する。
+
+    位置65-66（0始点、I2）に格納されている。
+    新規作成時は0。
+    """
+    pos = REVISION_COUNT_POSITION
+    if len(mesh_row_a) < pos + 2:
+        return 0
+    raw = mesh_row_a[pos : pos + 2].strip()
+    if not raw or not raw.isdigit():
+        return 0
+    return int(raw)
+
+
+def _calc_mesh_row_count(revision_count: int) -> int:
+    """Mレコード全体の行数を計算する。
+
+    (a)(b)(c)の3行 + (d)(e)(f)×(修正回数+1)
+    """
+    return MESH_BASE_ROWS + MESH_HISTORY_SET_ROWS * (revision_count + 1)
+
+
 def classify(records: Iterator[bytes]) -> ClassifiedRecords:
     """レコード列を分類し、構造化して返す。
 
-    3フェーズで処理する:
-        Phase 1: インデックスレコード（先頭3行）
-        Phase 2: 図郭レコード（H/Eが出現するまで）
-        Phase 3: 要素グループ（H + E + 座標行）
+    2フェーズで処理する:
+        Phase 1: Mレコード（図郭レコード全行を可変長で収集）
+        Phase 2: 要素グループ（H + E + 座標行）
     Args:
         records: reader.read_records() の戻り値
     Returns:
         ClassifiedRecords
     Raises:
-        ValueError: インデックスレコードが3行未満の場合
+        ValueError: Mレコードの行数が不足している場合
     """
     record_list = list(records)
 
-    # --- Phase 1: インデックスレコード（先頭3行） ---
-    if len(record_list) < INDEX_RECORD_COUNT:
+    # --- Phase 1: Mレコード（図郭レコード）を可変長で収集 ---
+    if len(record_list) < MESH_BASE_ROWS:
         raise ValueError(
-            f"インデックスレコードが{INDEX_RECORD_COUNT}行未満です"
-            f"（{len(record_list)}行）"
+            f"Mレコードが{MESH_BASE_ROWS}行未満です（{len(record_list)}行）"
         )
-    index_records = (record_list[0], record_list[1], record_list[2])
 
-    # --- Phase 2: 図郭レコード（H/Eが出現するまで） ---
-    map_sheet_lines: list[bytes] = []
-    pos = INDEX_RECORD_COUNT
+    revision_count = _get_revision_count(record_list[0])
+    mesh_row_count = _calc_mesh_row_count(revision_count)
 
-    while pos < len(record_list):
-        record = record_list[pos]
-        if _is_header_prefix(record) or _is_element_prefix(record):
-            break
-        if not _is_modification_history(record):
-            map_sheet_lines.append(record)
-        pos += 1
+    if len(record_list) < mesh_row_count:
+        raise ValueError(
+            f"Mレコードが不足しています（修正回数{revision_count}→"
+            f"必要{mesh_row_count}行、実際{len(record_list)}行）"
+        )
 
-    # --- Phase 3: 要素グループ（H + E + 座標行） ---
+    mesh_rows = tuple(record_list[:mesh_row_count])
+    pos = mesh_row_count
+
+    # --- Phase 2: 要素グループ（H + E + 座標行） ---
     element_groups: list[ElementGroup] = []
     current_header: bytes | None = None
     current_elements: list[ElementRecord] = []
@@ -132,21 +146,6 @@ def classify(records: Iterator[bytes]) -> ClassifiedRecords:
         # G/Tレコードは読み飛ばす
         if _is_skip_prefix(record):
             pos += 1
-            continue
-
-        # 修正履歴レコードは後続行ごとスキップする
-        if _is_modification_history(record):
-            pos += 1
-            if _is_element_prefix(record) and _has_following_lines(record[1]):
-                while pos < len(record_list):
-                    next_record = record_list[pos]
-                    if (
-                        _is_header_prefix(next_record)
-                        or _is_element_prefix(next_record)
-                        or _is_skip_prefix(next_record)
-                    ):
-                        break
-                    pos += 1
             continue
 
         # H行: 新しい要素グループの開始
@@ -170,7 +169,6 @@ def classify(records: Iterator[bytes]) -> ClassifiedRecords:
 
             if _has_following_lines(element_type):
                 # 後続行（座標行/注記行）を収集
-                # 座標行は84バイト全体がデータなので修正履歴チェックは行わない
                 coord_lines: list[bytes] = []
                 pos += 1
                 while pos < len(record_list):
@@ -211,7 +209,6 @@ def classify(records: Iterator[bytes]) -> ClassifiedRecords:
         )
 
     return ClassifiedRecords(
-        index_records=index_records,
-        map_sheet_records=tuple(map_sheet_lines),
+        mesh_rows=mesh_rows,
         element_groups=tuple(element_groups),
     )
