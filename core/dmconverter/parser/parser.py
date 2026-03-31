@@ -11,7 +11,6 @@ from core.dmconverter.parser.models import (
     AnnotationInfo,
     AttributeInfo,
     Coordinate,
-    MapSheetInfo,
     MeshInfo,
     ParsedDM,
     ParsedElement,
@@ -34,21 +33,6 @@ def _safe_int(text: str, default: int = 0) -> int:
     if check.isdigit():
         return int(stripped)
     return default
-
-
-def _format_date(raw: str) -> str | None:
-    """DM生データの4桁日付(YYMM)をYYYY/MM形式に変換する。
-
-    "0000"や空文字はNoneを返す（GeoPackageでNULLになる）。
-    例: "1703" → "2017/03", "0000" → None
-    """
-    stripped = raw.strip()
-    if not stripped or stripped == "0000":
-        return None
-    yy = stripped[:2]
-    mm = stripped[2:4]
-    year = f"20{yy}" if int(yy) < 50 else f"19{yy}"
-    return f"{year}/{mm}"
 
 
 def _parse_coordinate_line_2d(line: str, remaining: int) -> list[Coordinate]:
@@ -101,29 +85,17 @@ def _parse_coordinate_line_3d(line: str, remaining: int) -> list[Coordinate]:
 
 
 def _extract_common_fields(record: str) -> dict:
-    """E行から共通フィールドを抽出する。
-
-    バイト位置はfuroku8-1.pdf p.8「要素レコード」およびPSEA出力との照合に基づく。
-    """
+    """E行から共通フィールドを抽出する。"""
     return {
-        "element_type": record[0:2],       # A2: レコードタイプ
-        "dm_code": record[2:6].strip(),    # I4: 分類コード（レイヤ）
-        "item_code": record[6:8].strip(),  # I2: 分類コード（項目）
-        "chiiki_bunrui": _safe_int(record[8:10]),   # I2: 地域分類
-        "jouhou_bunrui": _safe_int(record[10:12]),  # I2: 情報分類
-        "element_id": _safe_int(record[12:16]),     # I4: 要素識別番号
-        "hierarchy": _safe_int(record[16:18]),       # I2: 階層レベル
-        "zukei_kubun": _safe_int(record[18:20]),     # I2: 図形区分
-        "data_kubun": _safe_int(record[20:21]),      # I1: 実データ区分
-        "seido_kubun": _safe_int(record[21:23]),     # I2: 精度区分
-        "chuki_kubun": _safe_int(record[23:24]),     # I1: 注記区分
-        "teni": _safe_int(record[24:26]),             # I2: 転位区分
-        "kandan": _safe_int(record[26:27]),           # I1: 間断区分
-        "coord_count": _safe_int(record[27:31]),     # I4: データ数
-        "record_count": _safe_int(record[31:35]),    # I4: レコード数
-        "acquired_date": _format_date(record[65:69]) if len(record) >= 69 else None,
-        "updated_date": _format_date(record[69:73]) if len(record) >= 73 else None,
-        "deleted_date": _format_date(record[73:77]) if len(record) >= 77 else None,
+        "element_type": record[0:2],
+        "dm_code": record[2:6].strip(),
+        "hierarchy": _safe_int(record[15:16]),
+        "zukei_kubun": _safe_int(record[18:20]),
+        "data_kubun": _safe_int(record[20:21]),
+        "teni": _safe_int(record[24:26]),
+        "kandan": _safe_int(record[26:27]),
+        "coord_count": _safe_int(record[27:31]),
+        "record_count": _safe_int(record[31:35]),
     }
 
 
@@ -132,20 +104,11 @@ def _build_parsed_element(fields: dict, **kwargs) -> ParsedElement:
     return ParsedElement(
         element_type=fields["element_type"],
         dm_code=fields["dm_code"],
-        item_code=fields["item_code"],
-        chiiki_bunrui=fields["chiiki_bunrui"],
-        jouhou_bunrui=fields["jouhou_bunrui"],
-        element_id=fields["element_id"],
         hierarchy=fields["hierarchy"],
         zukei_kubun=fields["zukei_kubun"],
         data_kubun=fields["data_kubun"],
-        seido_kubun=fields["seido_kubun"],
-        chuki_kubun=fields["chuki_kubun"],
         teni=fields["teni"],
         kandan=fields["kandan"],
-        acquired_date=fields["acquired_date"],
-        updated_date=fields["updated_date"],
-        deleted_date=fields["deleted_date"],
         **kwargs,
     )
 
@@ -196,15 +159,7 @@ def _parse_point_element(record: str) -> ParsedElement:
 
     coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
 
-    attribute_value = _safe_int(record[49:56])
-    zokusei_kubun = _safe_int(record[56:58])
-
-    return _build_parsed_element(
-        fields,
-        coordinates=coordinates,
-        attribute_value=attribute_value,
-        zokusei_kubun=zokusei_kubun,
-    )
+    return _build_parsed_element(fields, coordinates=coordinates)
 
 
 def _parse_direction_element(
@@ -349,36 +304,8 @@ def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
     )
 
 
-def _parse_map_sheet(mesh_rows: tuple[bytes, ...]) -> MapSheetInfo:
-    """Mレコードの(b)行からMapSheetInfoを抽出する。
-
-    図郭レコード(b)のフィールド定義（0始点バイト位置）:
-        0-6:   左下図郭座標 X (I7, メートル)
-        7-13:  左下図郭座標 Y (I7, メートル)
-        14-20: 右上図郭座標 X (I7, メートル)
-        21-27: 右上図郭座標 Y (I7, メートル)
-        44-46: 座標値の単位 (I3)
-    """
-    record = mesh_rows[1].decode("ascii", errors="replace")
-
-    origin_x = _safe_int(record[0:7])
-    origin_y = _safe_int(record[7:14])
-    upper_x = _safe_int(record[14:21])
-    upper_y = _safe_int(record[21:28])
-    coord_unit = _safe_int(record[44:47])
-
-    return MapSheetInfo(
-        origin_x=origin_x,
-        origin_y=origin_y,
-        upper_x=upper_x,
-        upper_y=upper_y,
-        coord_unit=coord_unit,
-    )
-
-
 def parse(classified: ClassifiedRecords) -> ParsedDM:
     """分類済みレコードを解析し、構造化データとして返す。
-
     Args:
         classified: classifier.classify() の戻り値
 
@@ -387,8 +314,7 @@ def parse(classified: ClassifiedRecords) -> ParsedDM:
     """
     enc = classified.encoding
     mesh_info = _parse_mesh_info(classified.mesh_rows, enc)
-    map_sheet = _parse_map_sheet(classified.mesh_rows)
     groups = tuple(
         _parse_element_group(group, enc) for group in classified.element_groups
     )
-    return ParsedDM(mesh_info=mesh_info, map_sheet=map_sheet, groups=groups)
+    return ParsedDM(mesh_info=mesh_info, groups=groups)
