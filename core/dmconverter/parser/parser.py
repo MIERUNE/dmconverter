@@ -236,18 +236,17 @@ def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
     """図郭レコード(a)からMeshInfoを抽出する。
     1行目: M行 — 図郭名の先頭2文字が座標系番号
     """
-    line_a = mesh_rows[0].decode(encoding, errors="replace")
+    line_a = mesh_rows[0]  # bytesのままスライスして日本語の位置ずれを防ぐ
 
-    # 図郭名は位置2-9（"M "の後）
-    # 先頭2文字が座標系番号（例: "02" → 系2）
-    map_sheet_id = line_a[2:9].strip()
+    # 図郭識別番号: 位置3-10 (A8)
+    map_sheet_id = line_a[2:10].decode("ascii", errors="replace").strip()
     coordinate_system = _safe_int(map_sheet_id[:2])
 
-    # 図名は位置10-29
-    map_name = line_a[10:29].strip()
+    # 図郭名称: 位置11-30 (A20, 日本語含む)
+    map_name = line_a[10:30].decode(encoding, errors="replace").strip()
 
-    # 縮尺分母は位置29-33
-    scale = _safe_int(line_a[29:33])
+    # 地図情報レベル: 位置31-35 (I5)
+    scale = _safe_int(line_a[30:35].decode("ascii", errors="replace"))
 
     return MeshInfo(
         coordinate_system=coordinate_system,

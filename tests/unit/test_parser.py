@@ -120,19 +120,23 @@ class TestParsePointElement(unittest.TestCase):
 class TestParseMeshInfo(unittest.TestCase):
     def test_coordinate_system(self):
         """図郭レコードから座標系番号を抽出する"""
+        # 仕様書のバイト位置で構築:
+        # レコードタイプ(A2, 0:2) + 図郭識別番号(A8, 2:10)
+        # + 図郭名称(A20, 10:30) + 地図情報レベル(I5, 30:35)
+        rec_type = b"M "  # 2 bytes
+        sheet_id = b"02JF613 "  # 8 bytes
+        map_name = "杵ヶ原".encode("shift_jis").ljust(20)  # 20 bytes
+        level = b" 1000"  # 5 bytes
+        line_a = rec_type + sheet_id + map_name + level
+        line_a = line_a.ljust(84)
         mesh_rows = (
-            "M 02JF613 地形測量               1000啪市立用パデータ           111               ".encode(
-                "utf-8"
-            ),
-            "   9000  44000  10500  46000    26332  80920  1  10500  44000   9000  46000         ".encode(
-                "utf-8"
-            ),
-            "02JF602 02JF611                         02JF711 02JF702 02JF604                     ".encode(
-                "utf-8"
-            ),
+            line_a,
+            b"   9000  44000  10500  46000    26332  80920  1  10500  44000   9000  46000         ",
+            b"02JF602 02JF611                         02JF711 02JF702 02JF604                     ",
         )
-        info = _parse_mesh_info(mesh_rows, "utf-8")
+        info = _parse_mesh_info(mesh_rows, "shift_jis")
         self.assertEqual(info.coordinate_system, 2)
+        self.assertEqual(info.map_name, "杵ヶ原")
         self.assertEqual(info.scale, 1000)
 
 
