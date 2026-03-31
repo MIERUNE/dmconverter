@@ -5,7 +5,7 @@
 
 from core.dmconverter.parser.models import (  # noqa: F401
     Coordinate,
-    IndexInfo,
+    MeshInfo,
     ParsedDM,
     ParsedElement,
     ParsedGroup,

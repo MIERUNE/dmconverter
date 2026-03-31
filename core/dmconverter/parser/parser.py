@@ -9,7 +9,7 @@ from core.dmconverter.classifier import ClassifiedRecords, ElementGroup, Element
 from core.dmconverter.constants import COORD_FIELD_WIDTH
 from core.dmconverter.parser.models import (
     Coordinate,
-    IndexInfo,
+    MeshInfo,
     ParsedDM,
     ParsedElement,
     ParsedGroup,
@@ -181,16 +181,20 @@ _COORD_LINE_PARSERS = {
 }
 
 
-def _parse_element(elem: ElementRecord) -> ParsedElement:
+def _parse_element(elem: ElementRecord, encoding: str) -> ParsedElement:
     """ElementRecordを要素タイプに応じて解析する。"""
-    element_type = elem.record[1]
+    record = elem.record.decode(encoding, errors="replace")
+    coord_lines = tuple(
+        line.decode(encoding, errors="replace") for line in elem.coordinate_lines
+    )
+    element_type = record[1]
 
     if element_type == "5":
-        return _parse_point_element(elem.record)
+        return _parse_point_element(record)
 
     # E7/E8はPR2で対応。暫定的に座標なしで返す。
     if element_type in "78":
-        fields = _extract_common_fields(elem.record)
+        fields = _extract_common_fields(record)
         return ParsedElement(
             element_type=fields["element_type"],
             dm_code=fields["dm_code"],
@@ -204,10 +208,10 @@ def _parse_element(elem: ElementRecord) -> ParsedElement:
 
     parser = _COORD_LINE_PARSERS.get(element_type)
     if parser is not None:
-        return parser(elem.record, elem.coordinate_lines)
+        return parser(record, coord_lines)
 
     # 未知の要素タイプ
-    fields = _extract_common_fields(elem.record)
+    fields = _extract_common_fields(record)
     return ParsedElement(
         element_type=fields["element_type"],
         dm_code=fields["dm_code"],
@@ -220,19 +224,20 @@ def _parse_element(elem: ElementRecord) -> ParsedElement:
     )
 
 
-def _parse_element_group(group: ElementGroup) -> ParsedGroup:
+def _parse_element_group(group: ElementGroup, encoding: str) -> ParsedGroup:
     """ElementGroupを解析する。"""
-    dm_code = group.header[2:6].strip()
-    elements = tuple(_parse_element(elem) for elem in group.elements)
+    header = group.header.decode(encoding, errors="replace")
+    dm_code = header[2:6].strip()
+    elements = tuple(_parse_element(elem, encoding) for elem in group.elements)
     return ParsedGroup(dm_code=dm_code, elements=elements)
 
 
-def _parse_index(index_records: tuple[str, str, str]) -> IndexInfo:
-    """インデックスレコードからIndexInfoを抽出する。
+def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
+    """図郭レコード(a)からMeshInfoを抽出する。
 
     1行目: M行 — 図郭名の先頭2文字が座標系番号
     """
-    line_a = index_records[0]
+    line_a = mesh_rows[0].decode(encoding, errors="replace")
 
     # 図郭名は位置2-9（"M "の後）
     # 先頭2文字が座標系番号（例: "02" → 系2）
@@ -245,7 +250,7 @@ def _parse_index(index_records: tuple[str, str, str]) -> IndexInfo:
     # 縮尺分母は位置29-33
     scale = _safe_int(line_a[29:33])
 
-    return IndexInfo(
+    return MeshInfo(
         coordinate_system=coordinate_system,
         map_name=map_name,
         scale=scale,
@@ -261,6 +266,9 @@ def parse(classified: ClassifiedRecords) -> ParsedDM:
     Returns:
         ParsedDM: 解析済みDMデータ
     """
-    index = _parse_index(classified.index_records)
-    groups = tuple(_parse_element_group(group) for group in classified.element_groups)
-    return ParsedDM(index=index, groups=groups)
+    enc = classified.encoding
+    mesh_info = _parse_mesh_info(classified.mesh_rows, enc)
+    groups = tuple(
+        _parse_element_group(group, enc) for group in classified.element_groups
+    )
+    return ParsedDM(mesh_info=mesh_info, groups=groups)

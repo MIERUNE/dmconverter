@@ -40,8 +40,8 @@ class ParsedGroup:
 
 
 @dataclass(frozen=True)
-class IndexInfo:
-    """インデックス情報"""
+class MeshInfo:
+    """図郭情報"""
 
     coordinate_system: int  # 座標系番号（1-19）
     map_name: str  # 図名
@@ -52,5 +52,5 @@ class IndexInfo:
 class ParsedDM:
     """解析済みDMデータ（parserの最終出力）"""
 
-    index: IndexInfo
+    mesh_info: MeshInfo
     groups: tuple[ParsedGroup, ...]
