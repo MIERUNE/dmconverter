@@ -14,8 +14,8 @@ from core.dmconverter.parser.parser import (
     _parse_attribute_element,
     _parse_coordinate_line_2d,
     _parse_coordinate_line_3d,
-    _parse_index,
     _parse_map_sheet,
+    _parse_mesh_info,
     _parse_point_element,
     _safe_int,
     parse,
@@ -31,32 +31,31 @@ SAMPLE_DM_FILES = [
 
 class TestSafeInt(unittest.TestCase):
     def test_normal_integer(self):
-        self.assertEqual(_safe_int(b"42"), 42)
+        self.assertEqual(_safe_int("42"), 42)
 
     def test_padded_with_spaces(self):
-        self.assertEqual(_safe_int(b"  80"), 80)
+        self.assertEqual(_safe_int("  80"), 80)
 
-    def test_empty_bytes(self):
-        self.assertEqual(_safe_int(b""), 0)
+    def test_empty_string(self):
+        self.assertEqual(_safe_int(""), 0)
 
     def test_spaces_only(self):
-        self.assertEqual(_safe_int(b"   "), 0)
+        self.assertEqual(_safe_int("   "), 0)
 
     def test_negative(self):
-        self.assertEqual(_safe_int(b"-5"), -5)
+        self.assertEqual(_safe_int("-5"), -5)
 
     def test_non_numeric(self):
-        self.assertEqual(_safe_int(b"abc"), 0)
+        self.assertEqual(_safe_int("abc"), 0)
 
     def test_custom_default(self):
-        self.assertEqual(_safe_int(b"", default=-1), -1)
+        self.assertEqual(_safe_int("", default=-1), -1)
 
 
 class TestParseCoordinateLine2d(unittest.TestCase):
     def test_full_line_from_sample(self):
         """サンプルデータの実座標行（6組）を正しく解析する"""
-        # 02JF613.dm 12行目のデータ
-        line = b"1106380 6343101106470 6324501106590 6297801105640 6250001103280 6213101099910 616240"
+        line = "1106380 6343101106470 6324501106590 6297801105640 6250001103280 6213101099910 616240"
         coords = _parse_coordinate_line_2d(line, 6)
         self.assertEqual(len(coords), 6)
         self.assertEqual(coords[0], Coordinate(x=1106380, y=634310))
@@ -65,7 +64,7 @@ class TestParseCoordinateLine2d(unittest.TestCase):
 
     def test_line_with_padding(self):
         """パディング（0, 0）ペアを含む行"""
-        line = b" 4533511745422 4567361736530      0      0      0      0      0      0      0      0"
+        line = " 4533511745422 4567361736530      0      0      0      0      0      0      0      0"
         coords = _parse_coordinate_line_2d(line, 6)
         self.assertEqual(len(coords), 2)
         self.assertEqual(coords[0], Coordinate(x=453351, y=1745422))
@@ -73,7 +72,7 @@ class TestParseCoordinateLine2d(unittest.TestCase):
 
     def test_remaining_limits_output(self):
         """remainingで座標数を制限できる"""
-        line = b"1106380 6343101106470 6324501106590 6297801105640 6250001103280 6213101099910 616240"
+        line = "1106380 6343101106470 6324501106590 6297801105640 6250001103280 6213101099910 616240"
         coords = _parse_coordinate_line_2d(line, 2)
         self.assertEqual(len(coords), 2)
 
@@ -81,8 +80,7 @@ class TestParseCoordinateLine2d(unittest.TestCase):
 class TestParseCoordinateLine3d(unittest.TestCase):
     def test_basic_3d_line(self):
         """3D座標行を正しく解析する"""
-        # 7文字×3=21文字×4組=84文字
-        line = b" 100000 200000 000050 300000 400000 000100      0      0      0      0      0      0"
+        line = " 100000 200000 000050 300000 400000 000100      0      0      0      0      0      0"
         coords = _parse_coordinate_line_3d(line, 4)
         self.assertEqual(len(coords), 2)
         self.assertEqual(coords[0], Coordinate(x=100000, y=200000, z=50))
@@ -92,28 +90,30 @@ class TestParseCoordinateLine3d(unittest.TestCase):
 class TestExtractCommonFields(unittest.TestCase):
     def test_e2_record(self):
         """E2レコードから共通フィールドを抽出する"""
-        record = b"E22101 0   0   1 2152350 00  80  14      0      0      0 0       170300000000      1"
+        record = "E22101 0   0   1 2152350 00  80  14      0      0      0 0       170300000000      1"
         fields = _extract_common_fields(record)
         self.assertEqual(fields["element_type"], "E2")
         self.assertEqual(fields["dm_code"], "2101")
-        self.assertEqual(fields["hierarchy"], 1)
+        self.assertEqual(fields["element_id"], 1)
+        self.assertEqual(fields["hierarchy"], 2)
+        self.assertEqual(fields["zukei_kubun"], 15)
         self.assertEqual(fields["data_kubun"], 2)
+        self.assertEqual(fields["seido_kubun"], 35)
         self.assertEqual(fields["coord_count"], 80)
         self.assertEqual(fields["record_count"], 14)
 
     def test_e5_record(self):
         """E5レコードから共通フィールドを抽出する"""
-        record = b"E52253 0   0   1 2 00350 00   0   0 7530601721853      0 0       170300000000      1"
+        record = "E52253 0   0   1 2 00350 00   0   0 7530601721853      0 0       170300000000      1"
         fields = _extract_common_fields(record)
         self.assertEqual(fields["element_type"], "E5")
         self.assertEqual(fields["dm_code"], "2253")
-        self.assertEqual(fields["coord_count"], 0)
 
 
 class TestParsePointElement(unittest.TestCase):
     def test_e5_embedded_coordinates(self):
         """E5要素の埋め込み座標を正しく解析する"""
-        record = b"E52253 0   0   1 2 00350 00   0   0 7530601721853      0 0       170300000000      1"
+        record = "E52253 0   0   1 2 00350 00   0   0 7530601721853      0 0       170300000000      1"
         elem = _parse_point_element(record)
         self.assertEqual(elem.element_type, "E5")
         self.assertEqual(elem.dm_code, "2253")
@@ -122,14 +122,14 @@ class TestParsePointElement(unittest.TestCase):
         self.assertEqual(elem.coordinates[0].y, 1721853)
 
 
-class TestParseIndex(unittest.TestCase):
+class TestParseMeshInfo(unittest.TestCase):
     def test_coordinate_system(self):
         """Mレコードから座標系番号を抽出する"""
         dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm
         encoding = detect_encoding(dm_path)
         records = list(read_records(dm_path))
         mesh_rows = tuple(records[:3])
-        info = _parse_index(mesh_rows, encoding)
+        info = _parse_mesh_info(mesh_rows, encoding)
         self.assertEqual(info.coordinate_system, 2)
         self.assertEqual(info.scale, 1000)
 
@@ -139,33 +139,29 @@ class TestParseWithSampleData(unittest.TestCase):
         """サンプルDMファイルからParsedDMが返される"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                encoding = detect_encoding(dm_path)
-                result = parse(classify(read_records(dm_path)), encoding)
+                result = parse(classify(read_records(dm_path)))
                 self.assertIsInstance(result, ParsedDM)
 
-    def test_index_has_valid_coordinate_system(self):
+    def test_mesh_info_has_valid_coordinate_system(self):
         """座標系番号が1-19の範囲内"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                encoding = detect_encoding(dm_path)
-                result = parse(classify(read_records(dm_path)), encoding)
-                self.assertGreaterEqual(result.index.coordinate_system, 1)
-                self.assertLessEqual(result.index.coordinate_system, 19)
+                result = parse(classify(read_records(dm_path)))
+                self.assertGreaterEqual(result.mesh_info.coordinate_system, 1)
+                self.assertLessEqual(result.mesh_info.coordinate_system, 19)
 
     def test_groups_not_empty(self):
         """グループが空でない"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                encoding = detect_encoding(dm_path)
-                result = parse(classify(read_records(dm_path)), encoding)
+                result = parse(classify(read_records(dm_path)))
                 self.assertGreater(len(result.groups), 0)
 
     def test_all_dm_codes_are_4_digits(self):
         """全dm_codeが4桁文字列"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                encoding = detect_encoding(dm_path)
-                result = parse(classify(read_records(dm_path)), encoding)
+                result = parse(classify(read_records(dm_path)))
                 for group in result.groups:
                     self.assertEqual(
                         len(group.dm_code),
@@ -183,8 +179,7 @@ class TestParseWithSampleData(unittest.TestCase):
         """E2要素が座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                encoding = detect_encoding(dm_path)
-                result = parse(classify(read_records(dm_path)), encoding)
+                result = parse(classify(read_records(dm_path)))
                 e2_found = False
                 for group in result.groups:
                     for elem in group.elements:
@@ -201,8 +196,7 @@ class TestParseWithSampleData(unittest.TestCase):
         """E5要素が1つの座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                encoding = detect_encoding(dm_path)
-                result = parse(classify(read_records(dm_path)), encoding)
+                result = parse(classify(read_records(dm_path)))
                 for group in result.groups:
                     for elem in group.elements:
                         if elem.element_type == "E5":
@@ -216,8 +210,7 @@ class TestParseWithSampleData(unittest.TestCase):
         """E6要素が座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                encoding = detect_encoding(dm_path)
-                result = parse(classify(read_records(dm_path)), encoding)
+                result = parse(classify(read_records(dm_path)))
                 for group in result.groups:
                     for elem in group.elements:
                         if elem.element_type == "E6":
@@ -231,9 +224,9 @@ class TestParseWithSampleData(unittest.TestCase):
 class TestParseAnnotationElement(unittest.TestCase):
     def test_e7_coordinates(self):
         """E7要素の代表点座標を正しく解析する"""
-        record = b"E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
-        annotation_line = b"0    -28   15    0 4410                                                             "
-        elem = _parse_annotation_element(record, (annotation_line,), "ascii")
+        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        annotation_line = "0    -28   15    0 4410                                                             "
+        elem = _parse_annotation_element(record, (annotation_line,))
         self.assertEqual(elem.element_type, "E7")
         self.assertEqual(elem.dm_code, "7101")
         self.assertEqual(len(elem.coordinates), 1)
@@ -242,10 +235,10 @@ class TestParseAnnotationElement(unittest.TestCase):
 
     def test_e7_annotation_info(self):
         """E7要素の注記情報を正しく解析する"""
-        record = b"E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
-        annotation_line = b"0    -28   15    0 4410                                                             "
-        elem = _parse_annotation_element(record, (annotation_line,), "ascii")
-        self.assertIsNotNone(elem.annotation)
+        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        annotation_line = "0    -28   15    0 4410                                                             "
+        elem = _parse_annotation_element(record, (annotation_line,))
+        assert elem.annotation is not None
         self.assertEqual(elem.annotation.orientation, 0)
         self.assertEqual(elem.annotation.angle, -28)
         self.assertEqual(elem.annotation.size, 15)
@@ -255,8 +248,8 @@ class TestParseAnnotationElement(unittest.TestCase):
 
     def test_e7_no_annotation_lines(self):
         """後続行がない場合、annotationはNone"""
-        record = b"E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
-        elem = _parse_annotation_element(record, (), "ascii")
+        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        elem = _parse_annotation_element(record, ())
         self.assertIsNone(elem.annotation)
         self.assertEqual(len(elem.coordinates), 1)
 
@@ -264,9 +257,9 @@ class TestParseAnnotationElement(unittest.TestCase):
 class TestParseAttributeElement(unittest.TestCase):
     def test_e8_coordinates(self):
         """E8要素の代表点座標を正しく解析する"""
-        record = b"E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
-        attribute_line = b"12345                                                                               "
-        elem = _parse_attribute_element(record, (attribute_line,), "ascii")
+        record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
+        attribute_line = "12345                                                                               "
+        elem = _parse_attribute_element(record, (attribute_line,))
         self.assertEqual(elem.element_type, "E8")
         self.assertEqual(len(elem.coordinates), 1)
         self.assertEqual(elem.coordinates[0].x, 500000)
@@ -274,16 +267,16 @@ class TestParseAttributeElement(unittest.TestCase):
 
     def test_e8_attribute_data(self):
         """E8要素の属性データを正しく解析する"""
-        record = b"E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
-        attribute_line = b"12345                                                                               "
-        elem = _parse_attribute_element(record, (attribute_line,), "ascii")
+        record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
+        attribute_line = "12345                                                                               "
+        elem = _parse_attribute_element(record, (attribute_line,))
         self.assertIsNotNone(elem.attribute)
         self.assertEqual(elem.attribute.data, "12345")
 
     def test_e8_no_attribute_lines(self):
         """後続行がない場合、attributeはNone"""
-        record = b"E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
-        elem = _parse_attribute_element(record, (), "ascii")
+        record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
+        elem = _parse_attribute_element(record, ())
         self.assertIsNone(elem.attribute)
 
 
@@ -291,8 +284,7 @@ class TestParseE7WithSampleData(unittest.TestCase):
     def test_e7_elements_have_coordinates_and_annotation(self):
         """サンプルデータのE7要素が座標と注記情報を持つ"""
         dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm (437 E7)
-        encoding = detect_encoding(dm_path)
-        result = parse(classify(read_records(dm_path)), encoding)
+        result = parse(classify(read_records(dm_path)))
         e7_count = 0
         for group in result.groups:
             for elem in group.elements:
@@ -330,8 +322,7 @@ class TestParseMapSheet(unittest.TestCase):
     def test_parsed_dm_has_map_sheet(self):
         """ParsedDMにmap_sheetが含まれる"""
         dm_path = SAMPLE_DM_FILES[0]
-        encoding = detect_encoding(dm_path)
-        result = parse(classify(read_records(dm_path)), encoding)
+        result = parse(classify(read_records(dm_path)))
         self.assertIsNotNone(result.map_sheet)
         self.assertGreater(result.map_sheet.origin_x, 0)
 

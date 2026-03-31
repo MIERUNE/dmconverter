@@ -32,18 +32,40 @@ _ELEMENT_TYPE_MAP = {
 }
 
 
+# ParsedElement属性名 → GeoPackageフィールド名（DM仕様書の正式名称）
+_FIELD_DEFS: list[tuple[str, str, QVariant.Type]] = [
+    ("element_type", "レコードタイプ", QVariant.String),
+    ("dm_code", "分類コード", QVariant.String),
+    ("item_code", "項目", QVariant.String),
+    ("chiiki_bunrui", "地域分類", QVariant.Int),
+    ("jouhou_bunrui", "情報分類", QVariant.Int),
+    ("element_id", "要素識別番号", QVariant.Int),
+    ("hierarchy", "階層レベル", QVariant.Int),
+    ("zukei_kubun", "図形区分", QVariant.Int),
+    ("data_kubun", "実データ区分", QVariant.Int),
+    ("seido_kubun", "精度区分", QVariant.Int),
+    ("chuki_kubun", "注記区分", QVariant.Int),
+    ("teni", "転位区分", QVariant.Int),
+    ("kandan", "間断区分", QVariant.Int),
+    ("attribute_value", "属性数値", QVariant.Int),
+    ("zokusei_kubun", "属性区分", QVariant.Int),
+    ("acquired_date", "取得年月", QVariant.String),
+    ("updated_date", "更新取得年月", QVariant.String),
+    ("deleted_date", "消去年月", QVariant.String),
+]
+
+
 def _build_fields() -> QgsFields:
     """レイヤの属性フィールドを定義する。"""
     fields = QgsFields()
-    fields.append(QgsField("dm_code", QVariant.String))
-    fields.append(QgsField("element_type", QVariant.String))
-    fields.append(QgsField("hierarchy", QVariant.Int))
+    for _, field_name, field_type in _FIELD_DEFS:
+        fields.append(QgsField(field_name, field_type))
     return fields
 
 
 def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
     """ParsedDM から分類コード×ジオメトリタイプ別のメモリレイヤを作成する。"""
-    epsg = get_epsg(dm.index.coordinate_system)
+    epsg = get_epsg(dm.mesh_info.coordinate_system)
     crs = QgsCoordinateReferenceSystem(f"EPSG:{epsg}")
 
     # (dm_code, geom_type_name) → [elements]
@@ -85,9 +107,8 @@ def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
                 continue
             feat = QgsFeature(layer.fields())
             feat.setGeometry(geom_func(elem, dm.map_sheet))
-            feat.setAttribute("dm_code", elem.dm_code)
-            feat.setAttribute("element_type", elem.element_type)
-            feat.setAttribute("hierarchy", elem.hierarchy)
+            for attr_name, field_name, _ in _FIELD_DEFS:
+                feat.setAttribute(field_name, getattr(elem, attr_name))
             features.append(feat)
 
         provider.addFeatures(features)

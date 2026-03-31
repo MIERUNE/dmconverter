@@ -11,8 +11,8 @@ from core.dmconverter.parser.models import (
     AnnotationInfo,
     AttributeInfo,
     Coordinate,
-    IndexInfo,
     MapSheetInfo,
+    MeshInfo,
     ParsedDM,
     ParsedElement,
     ParsedGroup,
@@ -23,21 +23,21 @@ from core.dmconverter.parser.models import (
 # ---------------------------------------------------------------------------
 
 
-def _safe_int(data: bytes, default: int = 0) -> int:
-    """バイト列を安全に整数変換する。変換できなければdefaultを返す。"""
-    stripped = data.strip()
+def _safe_int(text: str, default: int = 0) -> int:
+    """文字列を安全に整数変換する。変換できなければdefaultを返す。"""
+    stripped = text.strip()
     if not stripped:
         return default
-    check = stripped.lstrip(b"-")
+    check = stripped.lstrip("-")
     if not check:
         return default
     if check.isdigit():
-        return int(stripped.decode("ascii"))
+        return int(stripped)
     return default
 
 
-def _parse_coordinate_line_2d(line: bytes, remaining: int) -> list[Coordinate]:
-    """座標行から2D座標を固定7バイトフィールドで抽出する。
+def _parse_coordinate_line_2d(line: str, remaining: int) -> list[Coordinate]:
+    """座標行から2D座標を固定7文字フィールドで抽出する。
 
     1行に最大6組の(x, y)ペアが格納されている。
     remainingで必要な座標数を制限する。
@@ -60,8 +60,8 @@ def _parse_coordinate_line_2d(line: bytes, remaining: int) -> list[Coordinate]:
     return coords
 
 
-def _parse_coordinate_line_3d(line: bytes, remaining: int) -> list[Coordinate]:
-    """座標行から3D座標を固定7バイトフィールドで抽出する。
+def _parse_coordinate_line_3d(line: str, remaining: int) -> list[Coordinate]:
+    """座標行から3D座標を固定7文字フィールドで抽出する。
 
     1行に最大4組の(x, y, z)トリプルが格納されている。
     """
@@ -85,28 +85,57 @@ def _parse_coordinate_line_3d(line: bytes, remaining: int) -> list[Coordinate]:
     return coords
 
 
-def _extract_common_fields(record: bytes) -> dict:
-    """E行から共通フィールドを抽出する。"""
+def _extract_common_fields(record: str) -> dict:
+    """E行から共通フィールドを抽出する。
+
+    バイト位置はfuroku8-1.pdf p.8「要素レコード」およびPSEA出力との照合に基づく。
+    """
     return {
-        "element_type": record[0:2].decode("ascii"),
-        "dm_code": record[2:6].strip().decode("ascii"),
-        "hierarchy": _safe_int(record[15:16]),
-        "zukei_kubun": _safe_int(record[18:20]),
-        "data_kubun": _safe_int(record[20:21]),
-        "teni": _safe_int(record[24:26]),
-        "kandan": _safe_int(record[26:27]),
-        "coord_count": _safe_int(record[27:31]),
-        "record_count": _safe_int(record[31:35]),
+        "element_type": record[0:2],       # A2: レコードタイプ
+        "dm_code": record[2:6].strip(),    # I4: 分類コード（レイヤ）
+        "item_code": record[6:8].strip(),  # I2: 分類コード（項目）
+        "chiiki_bunrui": _safe_int(record[8:10]),   # I2: 地域分類
+        "jouhou_bunrui": _safe_int(record[10:12]),  # I2: 情報分類
+        "element_id": _safe_int(record[12:16]),     # I4: 要素識別番号
+        "hierarchy": _safe_int(record[16:18]),       # I2: 階層レベル
+        "zukei_kubun": _safe_int(record[18:20]),     # I2: 図形区分
+        "data_kubun": _safe_int(record[20:21]),      # I1: 実データ区分
+        "seido_kubun": _safe_int(record[21:23]),     # I2: 精度区分
+        "chuki_kubun": _safe_int(record[23:24]),     # I1: 注記区分
+        "teni": _safe_int(record[24:26]),             # I2: 転位区分
+        "kandan": _safe_int(record[26:27]),           # I1: 間断区分
+        "coord_count": _safe_int(record[27:31]),     # I4: データ数
+        "record_count": _safe_int(record[31:35]),    # I4: レコード数
     }
 
 
+def _build_parsed_element(fields: dict, **kwargs) -> ParsedElement:
+    """共通フィールドからParsedElementを生成するヘルパー。"""
+    return ParsedElement(
+        element_type=fields["element_type"],
+        dm_code=fields["dm_code"],
+        item_code=fields["item_code"],
+        chiiki_bunrui=fields["chiiki_bunrui"],
+        jouhou_bunrui=fields["jouhou_bunrui"],
+        element_id=fields["element_id"],
+        hierarchy=fields["hierarchy"],
+        zukei_kubun=fields["zukei_kubun"],
+        data_kubun=fields["data_kubun"],
+        seido_kubun=fields["seido_kubun"],
+        chuki_kubun=fields["chuki_kubun"],
+        teni=fields["teni"],
+        kandan=fields["kandan"],
+        **kwargs,
+    )
+
+
 # ---------------------------------------------------------------------------
-# 要素タイプ別パーサー（E1-E6）
+# 要素タイプ別パーサー（E1-E8）
 # ---------------------------------------------------------------------------
 
 
 def _parse_coords_from_lines(
-    fields: dict, coord_lines: tuple[bytes, ...]
+    fields: dict, coord_lines: tuple[str, ...]
 ) -> tuple[Coordinate, ...]:
     """後続座標行から座標列を解析する（E1-E4, E6共通）。"""
     is_3d = fields["data_kubun"] in (3, 6)
@@ -128,25 +157,15 @@ def _parse_coords_from_lines(
 
 
 def _parse_line_area_element(
-    record: bytes, coord_lines: tuple[bytes, ...]
+    record: str, coord_lines: tuple[str, ...]
 ) -> ParsedElement:
     """E1-E4（面・線・円・弧）を解析する。座標は後続行から取得。"""
     fields = _extract_common_fields(record)
     coordinates = _parse_coords_from_lines(fields, coord_lines)
-
-    return ParsedElement(
-        element_type=fields["element_type"],
-        dm_code=fields["dm_code"],
-        hierarchy=fields["hierarchy"],
-        zukei_kubun=fields["zukei_kubun"],
-        data_kubun=fields["data_kubun"],
-        teni=fields["teni"],
-        kandan=fields["kandan"],
-        coordinates=coordinates,
-    )
+    return _build_parsed_element(fields, coordinates=coordinates)
 
 
-def _parse_point_element(record: bytes) -> ParsedElement:
+def _parse_point_element(record: str) -> ParsedElement:
     """E5（点）を解析する。座標はE行自体に埋め込まれている。"""
     fields = _extract_common_fields(record)
 
@@ -156,27 +175,32 @@ def _parse_point_element(record: bytes) -> ParsedElement:
 
     coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
 
-    return ParsedElement(
-        element_type=fields["element_type"],
-        dm_code=fields["dm_code"],
-        hierarchy=fields["hierarchy"],
-        zukei_kubun=fields["zukei_kubun"],
-        data_kubun=fields["data_kubun"],
-        teni=fields["teni"],
-        kandan=fields["kandan"],
+    attribute_value = _safe_int(record[49:56])
+    zokusei_kubun = _safe_int(record[56:58])
+    acquired_date = record[65:69].strip() if len(record) >= 69 else ""
+    updated_date = record[69:73].strip() if len(record) >= 73 else ""
+    deleted_date = record[73:77].strip() if len(record) >= 77 else ""
+
+    return _build_parsed_element(
+        fields,
         coordinates=coordinates,
+        attribute_value=attribute_value,
+        zokusei_kubun=zokusei_kubun,
+        acquired_date=acquired_date,
+        updated_date=updated_date,
+        deleted_date=deleted_date,
     )
 
 
 def _parse_direction_element(
-    record: bytes, coord_lines: tuple[bytes, ...]
+    record: str, coord_lines: tuple[str, ...]
 ) -> ParsedElement:
     """E6（方向）を解析する。座標は後続行から取得。"""
     return _parse_line_area_element(record, coord_lines)
 
 
 def _parse_annotation_element(
-    record: bytes, annotation_lines: tuple[bytes, ...], encoding: str
+    record: str, annotation_lines: tuple[str, ...]
 ) -> ParsedElement:
     """E7（注記）を解析する。代表点座標はE行、注記データは後続行から取得。"""
     fields = _extract_common_fields(record)
@@ -200,7 +224,7 @@ def _parse_annotation_element(
         # 注記データ（pos 20-83）を全レコードから結合
         text_parts: list[str] = []
         for line in annotation_lines:
-            text_parts.append(line[20:84].decode(encoding))
+            text_parts.append(line[20:84])
         text = "".join(text_parts).rstrip()
 
         annotation = AnnotationInfo(
@@ -212,21 +236,15 @@ def _parse_annotation_element(
             text=text,
         )
 
-    return ParsedElement(
-        element_type=fields["element_type"],
-        dm_code=fields["dm_code"],
-        hierarchy=fields["hierarchy"],
-        zukei_kubun=fields["zukei_kubun"],
-        data_kubun=fields["data_kubun"],
-        teni=fields["teni"],
-        kandan=fields["kandan"],
+    return _build_parsed_element(
+        fields,
         coordinates=coordinates,
         annotation=annotation,
     )
 
 
 def _parse_attribute_element(
-    record: bytes, attribute_lines: tuple[bytes, ...], encoding: str
+    record: str, attribute_lines: tuple[str, ...]
 ) -> ParsedElement:
     """E8（属性）を解析する。代表点座標はE行、属性データは後続行から取得。"""
     fields = _extract_common_fields(record)
@@ -240,110 +258,82 @@ def _parse_attribute_element(
     # 後続属性レコードの解析（レコード全体が属性データ）
     attribute: AttributeInfo | None = None
     if attribute_lines:
-        data = "".join(line.decode(encoding) for line in attribute_lines).rstrip()
+        data = "".join(attribute_lines).rstrip()
         attribute = AttributeInfo(data=data)
 
-    return ParsedElement(
-        element_type=fields["element_type"],
-        dm_code=fields["dm_code"],
-        hierarchy=fields["hierarchy"],
-        zukei_kubun=fields["zukei_kubun"],
-        data_kubun=fields["data_kubun"],
-        teni=fields["teni"],
-        kandan=fields["kandan"],
+    return _build_parsed_element(
+        fields,
         coordinates=coordinates,
         attribute=attribute,
     )
 
 
 _COORD_LINE_PARSERS = {
-    ord(b"1"): _parse_line_area_element,
-    ord(b"2"): _parse_line_area_element,
-    ord(b"3"): _parse_line_area_element,
-    ord(b"4"): _parse_line_area_element,
-    ord(b"6"): _parse_direction_element,
+    "1": _parse_line_area_element,
+    "2": _parse_line_area_element,
+    "3": _parse_line_area_element,
+    "4": _parse_line_area_element,
+    "6": _parse_direction_element,
 }
 
 
 def _parse_element(elem: ElementRecord, encoding: str) -> ParsedElement:
     """ElementRecordを要素タイプに応じて解析する。"""
-    element_type = elem.record[1]
+    record = elem.record.decode(encoding, errors="replace")
+    coord_lines = tuple(
+        line.decode(encoding, errors="replace") for line in elem.coordinate_lines
+    )
+    element_type = record[1]
 
-    if element_type == ord(b"5"):
-        return _parse_point_element(elem.record)
+    if element_type == "5":
+        return _parse_point_element(record)
 
-    if element_type == ord(b"7"):
-        return _parse_annotation_element(
-            elem.record, elem.coordinate_lines, encoding
-        )
+    if element_type == "7":
+        return _parse_annotation_element(record, coord_lines)
 
-    if element_type == ord(b"8"):
-        return _parse_attribute_element(
-            elem.record, elem.coordinate_lines, encoding
-        )
+    if element_type == "8":
+        return _parse_attribute_element(record, coord_lines)
 
     parser = _COORD_LINE_PARSERS.get(element_type)
     if parser is not None:
-        return parser(elem.record, elem.coordinate_lines)
+        return parser(record, coord_lines)
 
     # 未知の要素タイプ
-    fields = _extract_common_fields(elem.record)
-    return ParsedElement(
-        element_type=fields["element_type"],
-        dm_code=fields["dm_code"],
-        hierarchy=fields["hierarchy"],
-        zukei_kubun=fields["zukei_kubun"],
-        data_kubun=fields["data_kubun"],
-        teni=fields["teni"],
-        kandan=fields["kandan"],
-        coordinates=(),
-    )
+    fields = _extract_common_fields(record)
+    return _build_parsed_element(fields, coordinates=())
 
 
 def _parse_element_group(group: ElementGroup, encoding: str) -> ParsedGroup:
     """ElementGroupを解析する。"""
-    dm_code = group.header[2:6].strip().decode("ascii")
+    header = group.header.decode(encoding, errors="replace")
+    dm_code = header[2:6].strip()
     elements = tuple(_parse_element(elem, encoding) for elem in group.elements)
     return ParsedGroup(dm_code=dm_code, elements=elements)
 
 
-def _parse_index(
-    mesh_rows: tuple[bytes, ...], encoding: str
-) -> IndexInfo:
-    """Mレコードの(a)行からIndexInfoを抽出する。
+def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
+    """図郭レコード(a)からMeshInfoを抽出する。"""
+    line_a = mesh_rows[0]  # bytesのままスライスして日本語の位置ずれを防ぐ
 
-    図郭レコード(a)のフィールド定義（0始点バイト位置）:
-        0-1:   レコードタイプ (A2) "M "
-        2-9:   図郭識別番号 (A8)
-        10-29: 図郭名称 (A20) ※日本語を含む
-        30-34: 地図情報レベル (I5)
-        35-64: タイトル名 (A30)
-    """
-    line_a = mesh_rows[0]
-
-    # 図郭識別番号（A8）の先頭2文字が座標系番号（例: "02" → 系2）
-    map_sheet_id = line_a[2:10].strip()
+    # 図郭識別番号: 位置3-10 (A8)
+    map_sheet_id = line_a[2:10].decode("ascii", errors="replace").strip()
     coordinate_system = _safe_int(map_sheet_id[:2])
 
-    # 図郭名称（A20）※日本語を含むためデコードが必要
-    map_name = line_a[10:30].decode(encoding).strip()
+    # 図郭名称: 位置11-30 (A20, 日本語含む)
+    map_name = line_a[10:30].decode(encoding, errors="replace").strip()
 
-    # 地図情報レベル（I5）
-    scale = _safe_int(line_a[30:35])
+    # 地図情報レベル: 位置31-35 (I5)
+    scale = _safe_int(line_a[30:35].decode("ascii", errors="replace"))
 
-    return IndexInfo(
+    return MeshInfo(
         coordinate_system=coordinate_system,
         map_name=map_name,
         scale=scale,
     )
 
 
-def _parse_map_sheet(
-    mesh_rows: tuple[bytes, ...],
-) -> MapSheetInfo:
+def _parse_map_sheet(mesh_rows: tuple[bytes, ...]) -> MapSheetInfo:
     """Mレコードの(b)行からMapSheetInfoを抽出する。
-
-    mesh_rows[0]=(a), mesh_rows[1]=(b), mesh_rows[2]=(c) に対応する。
 
     図郭レコード(b)のフィールド定義（0始点バイト位置）:
         0-6:   左下図郭座標 X (I7, メートル)
@@ -352,7 +342,7 @@ def _parse_map_sheet(
         21-27: 右上図郭座標 Y (I7, メートル)
         44-46: 座標値の単位 (I3)
     """
-    record = mesh_rows[1]
+    record = mesh_rows[1].decode("ascii", errors="replace")
 
     origin_x = _safe_int(record[0:7])
     origin_y = _safe_int(record[7:14])
@@ -369,20 +359,19 @@ def _parse_map_sheet(
     )
 
 
-def parse(classified: ClassifiedRecords, encoding: str = "utf-8") -> ParsedDM:
+def parse(classified: ClassifiedRecords) -> ParsedDM:
     """分類済みレコードを解析し、構造化データとして返す。
 
     Args:
         classified: classifier.classify() の戻り値
-        encoding: ファイルのエンコーディング（reader.detect_encoding() の戻り値）
 
     Returns:
         ParsedDM: 解析済みDMデータ
     """
-    index = _parse_index(classified.mesh_rows, encoding)
+    enc = classified.encoding
+    mesh_info = _parse_mesh_info(classified.mesh_rows, enc)
     map_sheet = _parse_map_sheet(classified.mesh_rows)
     groups = tuple(
-        _parse_element_group(group, encoding)
-        for group in classified.element_groups
+        _parse_element_group(group, enc) for group in classified.element_groups
     )
-    return ParsedDM(index=index, map_sheet=map_sheet, groups=groups)
+    return ParsedDM(mesh_info=mesh_info, map_sheet=map_sheet, groups=groups)

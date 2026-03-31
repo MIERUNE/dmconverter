@@ -42,12 +42,23 @@ class ParsedElement:
 
     element_type: str  # "E1"-"E8"
     dm_code: str  # 4桁分類コード
+    item_code: str  # 分類コード項目（2桁）
+    chiiki_bunrui: int  # 地域分類
+    jouhou_bunrui: int  # 情報分類
+    element_id: int  # 要素識別番号
     hierarchy: int  # 階層レベル
     zukei_kubun: int  # 図形区分
     data_kubun: int  # データ区分（2=2D, 3=3D）
+    seido_kubun: int  # 精度区分
+    chuki_kubun: int  # 注記区分
     teni: int  # 転位区分
     kandan: int  # 間断区分
     coordinates: tuple[Coordinate, ...]  # 座標列
+    attribute_value: int = 0  # 属性数値（標高値等）
+    zokusei_kubun: int = 0  # 属性区分
+    acquired_date: str = ""  # 取得年月
+    updated_date: str = ""  # 更新取得年月
+    deleted_date: str = ""  # 消去年月
     annotation: AnnotationInfo | None = None  # E7のみ
     attribute: AttributeInfo | None = None  # E8のみ
 
@@ -61,8 +72,8 @@ class ParsedGroup:
 
 
 @dataclass(frozen=True)
-class IndexInfo:
-    """インデックス情報"""
+class MeshInfo:
+    """図郭情報"""
 
     coordinate_system: int  # 座標系番号（1-19）
     map_name: str  # 図名
@@ -84,6 +95,6 @@ class MapSheetInfo:
 class ParsedDM:
     """解析済みDMデータ（parserの最終出力）"""
 
-    index: IndexInfo
+    mesh_info: MeshInfo
     map_sheet: MapSheetInfo
     groups: tuple[ParsedGroup, ...]

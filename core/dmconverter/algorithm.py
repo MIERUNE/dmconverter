@@ -16,7 +16,7 @@ from qgis.core import (
 
 from core.dmconverter.classifier import classify
 from core.dmconverter.parser.parser import parse
-from core.dmconverter.reader import detect_encoding, read_records
+from core.dmconverter.reader import read_records
 from core.dmconverter.writer import create_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
@@ -117,13 +117,12 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             return {self.OUTPUT: output_path}
 
         feedback.pushInfo(f"読み込み中: {input_file}")
-        encoding = detect_encoding(input_file)
         classified = classify(read_records(input_file))
-        parsed = parse(classified, encoding)
+        parsed = parse(classified)
 
         feedback.pushInfo(
             f"解析完了: {len(parsed.groups)}グループ, "
-            f"座標系{parsed.index.coordinate_system}"
+            f"座標系{parsed.mesh_info.coordinate_system}"
         )
 
         layers = create_layers(parsed)

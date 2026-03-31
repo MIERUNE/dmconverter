@@ -3,12 +3,12 @@ import unittest
 
 from core.dmconverter.classifier import (
     ClassifiedRecords,
+    _calc_mesh_row_count,
+    _get_revision_count,
     _has_following_lines,
     _is_element_prefix,
     _is_header_prefix,
     _is_skip_prefix,
-    _get_revision_count,
-    _calc_mesh_row_count,
     classify,
 )
 from core.dmconverter.reader import read_records
