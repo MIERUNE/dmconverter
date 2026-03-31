@@ -121,9 +121,15 @@ class TestParseMeshInfo(unittest.TestCase):
     def test_coordinate_system(self):
         """図郭レコードから座標系番号を抽出する"""
         mesh_rows = (
-            "M 02JF613 地形測量               1000啪市立用パデータ           111               ".encode("utf-8"),
-            "   9000  44000  10500  46000    26332  80920  1  10500  44000   9000  46000         ".encode("utf-8"),
-            "02JF602 02JF611                         02JF711 02JF702 02JF604                     ".encode("utf-8"),
+            "M 02JF613 地形測量               1000啪市立用パデータ           111               ".encode(
+                "utf-8"
+            ),
+            "   9000  44000  10500  46000    26332  80920  1  10500  44000   9000  46000         ".encode(
+                "utf-8"
+            ),
+            "02JF602 02JF611                         02JF711 02JF702 02JF604                     ".encode(
+                "utf-8"
+            ),
         )
         info = _parse_mesh_info(mesh_rows, "utf-8")
         self.assertEqual(info.coordinate_system, 2)
@@ -135,14 +141,18 @@ class TestParseWithSampleData(unittest.TestCase):
         """サンプルDMファイルからParsedDMが返される"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path), detect_encoding(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 self.assertIsInstance(result, ParsedDM)
 
     def test_index_has_valid_coordinate_system(self):
         """座標系番号が1-19の範囲内"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path), detect_encoding(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 self.assertGreaterEqual(result.mesh_info.coordinate_system, 1)
                 self.assertLessEqual(result.mesh_info.coordinate_system, 19)
 
@@ -150,14 +160,18 @@ class TestParseWithSampleData(unittest.TestCase):
         """グループが空でない"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path), detect_encoding(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 self.assertGreater(len(result.groups), 0)
 
     def test_all_dm_codes_are_4_digits(self):
         """全dm_codeが4桁文字列"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path), detect_encoding(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 for group in result.groups:
                     self.assertEqual(
                         len(group.dm_code),
@@ -175,7 +189,9 @@ class TestParseWithSampleData(unittest.TestCase):
         """E2要素が座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path), detect_encoding(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 e2_found = False
                 for group in result.groups:
                     for elem in group.elements:
@@ -192,7 +208,9 @@ class TestParseWithSampleData(unittest.TestCase):
         """E5要素が1つの座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path), detect_encoding(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 for group in result.groups:
                     for elem in group.elements:
                         if elem.element_type == "E5":
@@ -206,7 +224,9 @@ class TestParseWithSampleData(unittest.TestCase):
         """E6要素が座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path), detect_encoding(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 for group in result.groups:
                     for elem in group.elements:
                         if elem.element_type == "E6":
