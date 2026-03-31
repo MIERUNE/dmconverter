@@ -124,13 +124,24 @@ class TestParsePointElement(unittest.TestCase):
 
 class TestParseMeshInfo(unittest.TestCase):
     def test_coordinate_system(self):
-        """Mレコードから座標系番号を抽出する"""
-        dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm
-        encoding = detect_encoding(dm_path)
-        records = list(read_records(dm_path))
-        mesh_rows = tuple(records[:3])
-        info = _parse_mesh_info(mesh_rows, encoding)
+        """図郭レコードから座標系番号を抽出する"""
+        # 仕様書のバイト位置で構築:
+        # レコードタイプ(A2, 0:2) + 図郭識別番号(A8, 2:10)
+        # + 図郭名称(A20, 10:30) + 地図情報レベル(I5, 30:35)
+        rec_type = b"M "  # 2 bytes
+        sheet_id = b"02JF613 "  # 8 bytes
+        map_name = "杵ヶ原".encode("shift_jis").ljust(20)  # 20 bytes
+        level = b" 1000"  # 5 bytes
+        line_a = rec_type + sheet_id + map_name + level
+        line_a = line_a.ljust(84)
+        mesh_rows = (
+            line_a,
+            b"   9000  44000  10500  46000    26332  80920  1  10500  44000   9000  46000         ",
+            b"02JF602 02JF611                         02JF711 02JF702 02JF604                     ",
+        )
+        info = _parse_mesh_info(mesh_rows, "shift_jis")
         self.assertEqual(info.coordinate_system, 2)
+        self.assertEqual(info.map_name, "杵ヶ原")
         self.assertEqual(info.scale, 1000)
 
 
@@ -139,14 +150,18 @@ class TestParseWithSampleData(unittest.TestCase):
         """サンプルDMファイルからParsedDMが返される"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 self.assertIsInstance(result, ParsedDM)
 
     def test_mesh_info_has_valid_coordinate_system(self):
         """座標系番号が1-19の範囲内"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 self.assertGreaterEqual(result.mesh_info.coordinate_system, 1)
                 self.assertLessEqual(result.mesh_info.coordinate_system, 19)
 
@@ -154,14 +169,18 @@ class TestParseWithSampleData(unittest.TestCase):
         """グループが空でない"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 self.assertGreater(len(result.groups), 0)
 
     def test_all_dm_codes_are_4_digits(self):
         """全dm_codeが4桁文字列"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 for group in result.groups:
                     self.assertEqual(
                         len(group.dm_code),
@@ -179,7 +198,9 @@ class TestParseWithSampleData(unittest.TestCase):
         """E2要素が座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 e2_found = False
                 for group in result.groups:
                     for elem in group.elements:
@@ -196,7 +217,9 @@ class TestParseWithSampleData(unittest.TestCase):
         """E5要素が1つの座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 for group in result.groups:
                     for elem in group.elements:
                         if elem.element_type == "E5":
@@ -210,7 +233,9 @@ class TestParseWithSampleData(unittest.TestCase):
         """E6要素が座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
-                result = parse(classify(read_records(dm_path)))
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
                 for group in result.groups:
                     for elem in group.elements:
                         if elem.element_type == "E6":
@@ -284,7 +309,9 @@ class TestParseE7WithSampleData(unittest.TestCase):
     def test_e7_elements_have_coordinates_and_annotation(self):
         """サンプルデータのE7要素が座標と注記情報を持つ"""
         dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm (437 E7)
-        result = parse(classify(read_records(dm_path)))
+        result = parse(
+            classify(read_records(dm_path), detect_encoding(dm_path))
+        )
         e7_count = 0
         for group in result.groups:
             for elem in group.elements:
@@ -311,7 +338,7 @@ class TestParseMapSheet(unittest.TestCase):
     def test_map_sheet_from_sample(self):
         """サンプルデータから図郭情報を正しく抽出する"""
         dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm
-        classified = classify(read_records(dm_path))
+        classified = classify(read_records(dm_path), detect_encoding(dm_path))
         info = _parse_map_sheet(classified.mesh_rows)
         # 左下 < 右上 であること
         self.assertLess(info.origin_x, info.upper_x)
@@ -322,7 +349,9 @@ class TestParseMapSheet(unittest.TestCase):
     def test_parsed_dm_has_map_sheet(self):
         """ParsedDMにmap_sheetが含まれる"""
         dm_path = SAMPLE_DM_FILES[0]
-        result = parse(classify(read_records(dm_path)))
+        result = parse(
+            classify(read_records(dm_path), detect_encoding(dm_path))
+        )
         self.assertIsNotNone(result.map_sheet)
         self.assertGreater(result.map_sheet.origin_x, 0)
 

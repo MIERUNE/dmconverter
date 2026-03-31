@@ -327,7 +327,9 @@ def _parse_element_group(group: ElementGroup, encoding: str) -> ParsedGroup:
 
 
 def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
-    """図郭レコード(a)からMeshInfoを抽出する。"""
+    """図郭レコード(a)からMeshInfoを抽出する。
+    1行目: M行 — 図郭名の先頭2文字が座標系番号
+    """
     line_a = mesh_rows[0]  # bytesのままスライスして日本語の位置ずれを防ぐ
 
     # 図郭識別番号: 位置3-10 (A8)
