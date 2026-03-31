@@ -49,6 +49,7 @@ class ClassifiedRecords:
 
     mesh_rows: tuple[bytes, ...]
     element_groups: tuple[ElementGroup, ...]
+    encoding: str
 
 
 def _is_element_prefix(record: bytes) -> bool:
@@ -102,7 +103,7 @@ def _calc_mesh_row_count(revision_count: int) -> int:
     return MESH_BASE_ROWS + MESH_HISTORY_SET_ROWS * (revision_count + 1)
 
 
-def classify(records: Iterator[bytes]) -> ClassifiedRecords:
+def classify(records: Iterator[bytes], encoding: str = "cp932") -> ClassifiedRecords:
     """レコード列を分類し、構造化して返す。
 
     2フェーズで処理する:
@@ -211,4 +212,5 @@ def classify(records: Iterator[bytes]) -> ClassifiedRecords:
     return ClassifiedRecords(
         mesh_rows=mesh_rows,
         element_groups=tuple(element_groups),
+        encoding=encoding,
     )
