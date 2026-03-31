@@ -56,9 +56,9 @@ class ParsedElement:
     coordinates: tuple[Coordinate, ...]  # 座標列
     attribute_value: int = 0  # 属性数値（標高値等）
     zokusei_kubun: int = 0  # 属性区分
-    acquired_date: str = ""  # 取得年月
-    updated_date: str = ""  # 更新取得年月
-    deleted_date: str = ""  # 消去年月
+    acquired_date: str | None = None  # 取得年月（YYYY/MM or None）
+    updated_date: str | None = None  # 更新取得年月（YYYY/MM or None）
+    deleted_date: str | None = None  # 消去年月（YYYY/MM or None）
     annotation: AnnotationInfo | None = None  # E7のみ
     attribute: AttributeInfo | None = None  # E8のみ
 

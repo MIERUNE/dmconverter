@@ -20,7 +20,7 @@ from qgis.core import (
 )
 from PyQt5.QtCore import QVariant
 
-from core.dmconverter.constants import get_classification_name
+from core.dmconverter.constants import CLASSIFICATIONS
 from core.dmconverter.crs import get_epsg
 from core.dmconverter.geometry import to_line_geometry, to_point_geometry
 from core.dmconverter.parser.models import ParsedDM, ParsedElement
@@ -63,12 +63,20 @@ def _build_fields() -> QgsFields:
     return fields
 
 
+def _get_group_name(layer_code: str) -> str:
+    """上位2桁コードからグループ名を返す。"""
+    group = CLASSIFICATIONS.get(layer_code)
+    if group is not None:
+        return group["name"]
+    return layer_code
+
+
 def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
-    """ParsedDM から分類コード×ジオメトリタイプ別のメモリレイヤを作成する。"""
+    """ParsedDM から上位2桁グループ×ジオメトリタイプ別のメモリレイヤを作成する。"""
     epsg = get_epsg(dm.mesh_info.coordinate_system)
     crs = QgsCoordinateReferenceSystem(f"EPSG:{epsg}")
 
-    # (dm_code, geom_type_name) → [elements]
+    # (layer_code, geom_type_name) → [elements]
     groups: dict[tuple[str, str], list[ParsedElement]] = defaultdict(list)
 
     for group in dm.groups:
@@ -77,19 +85,20 @@ def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
             if type_info is None:
                 continue
             geom_type_name = type_info[0]
-            groups[(elem.dm_code, geom_type_name)].append(elem)
+            layer_code = elem.dm_code[:2]
+            groups[(layer_code, geom_type_name)].append(elem)
 
     layers: list[QgsVectorLayer] = []
     fields = _build_fields()
 
-    for (dm_code, geom_type_name), elements in groups.items():
+    for (layer_code, geom_type_name), elements in groups.items():
         type_info = _ELEMENT_TYPE_MAP[elements[0].element_type]
         wkb_type = type_info[1]
         geom_func = type_info[2]
 
-        # レイヤ名: "道路縁（街区線）_線" or "2199_線"
-        class_name = get_classification_name(dm_code)
-        layer_name = f"{class_name}_{geom_type_name}"
+        # レイヤ名: "道路_線" or "建物_点"
+        group_name = _get_group_name(layer_code)
+        layer_name = f"{group_name}_{geom_type_name}"
 
         # メモリレイヤ作成
         uri = f"{QgsWkbTypes.displayString(wkb_type)}?crs=EPSG:{epsg}"

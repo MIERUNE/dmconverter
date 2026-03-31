@@ -36,6 +36,21 @@ def _safe_int(text: str, default: int = 0) -> int:
     return default
 
 
+def _format_date(raw: str) -> str | None:
+    """DM生データの4桁日付(YYMM)をYYYY/MM形式に変換する。
+
+    "0000"や空文字はNoneを返す（GeoPackageでNULLになる）。
+    例: "1703" → "2017/03", "0000" → None
+    """
+    stripped = raw.strip()
+    if not stripped or stripped == "0000":
+        return None
+    yy = stripped[:2]
+    mm = stripped[2:4]
+    year = f"20{yy}" if int(yy) < 50 else f"19{yy}"
+    return f"{year}/{mm}"
+
+
 def _parse_coordinate_line_2d(line: str, remaining: int) -> list[Coordinate]:
     """座標行から2D座標を固定7文字フィールドで抽出する。
 
@@ -106,6 +121,9 @@ def _extract_common_fields(record: str) -> dict:
         "kandan": _safe_int(record[26:27]),           # I1: 間断区分
         "coord_count": _safe_int(record[27:31]),     # I4: データ数
         "record_count": _safe_int(record[31:35]),    # I4: レコード数
+        "acquired_date": _format_date(record[65:69]) if len(record) >= 69 else None,
+        "updated_date": _format_date(record[69:73]) if len(record) >= 73 else None,
+        "deleted_date": _format_date(record[73:77]) if len(record) >= 77 else None,
     }
 
 
@@ -125,6 +143,9 @@ def _build_parsed_element(fields: dict, **kwargs) -> ParsedElement:
         chuki_kubun=fields["chuki_kubun"],
         teni=fields["teni"],
         kandan=fields["kandan"],
+        acquired_date=fields["acquired_date"],
+        updated_date=fields["updated_date"],
+        deleted_date=fields["deleted_date"],
         **kwargs,
     )
 
@@ -177,18 +198,12 @@ def _parse_point_element(record: str) -> ParsedElement:
 
     attribute_value = _safe_int(record[49:56])
     zokusei_kubun = _safe_int(record[56:58])
-    acquired_date = record[65:69].strip() if len(record) >= 69 else ""
-    updated_date = record[69:73].strip() if len(record) >= 73 else ""
-    deleted_date = record[73:77].strip() if len(record) >= 77 else ""
 
     return _build_parsed_element(
         fields,
         coordinates=coordinates,
         attribute_value=attribute_value,
         zokusei_kubun=zokusei_kubun,
-        acquired_date=acquired_date,
-        updated_date=updated_date,
-        deleted_date=deleted_date,
     )
 
 

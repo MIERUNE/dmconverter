@@ -9,9 +9,11 @@ from collections import Counter
 
 from qgis.core import (
     QgsProcessingAlgorithm,
+    QgsProcessingContext,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
+    QgsVectorLayer,
 )
 
 from core.dmconverter.classifier import classify
@@ -130,6 +132,25 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
         save_to_geopackage(layers, output_path)
         feedback.pushInfo(f"GeoPackage出力完了: {output_path}")
+
+        # レイヤーをプロジェクトに追加
+        for layer in layers:
+            gpkg_layer = QgsVectorLayer(
+                f"{output_path}|layername={layer.name()}",
+                layer.name(),
+                "ogr",
+            )
+            context.addLayerToLoadOnCompletion(
+                gpkg_layer.id(),
+                QgsProcessingContext.LayerDetails(
+                    layer.name(),
+                    context.project(),
+                    layer.name(),
+                ),
+            )
+            context.temporaryLayerStore().addMapLayer(gpkg_layer)
+
+        feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
 
         # ログ出力
         output_log = self.parameterAsBool(parameters, self.OUTPUT_LOG, context)
