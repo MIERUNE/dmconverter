@@ -120,8 +120,7 @@ def classify(records: Iterator[bytes]) -> ClassifiedRecords:
     # --- Phase 1: Mレコード（図郭レコード）を可変長で収集 ---
     if len(record_list) < MESH_BASE_ROWS:
         raise ValueError(
-            f"Mレコードが{MESH_BASE_ROWS}行未満です"
-            f"（{len(record_list)}行）"
+            f"Mレコードが{MESH_BASE_ROWS}行未満です（{len(record_list)}行）"
         )
 
     revision_count = _get_revision_count(record_list[0])

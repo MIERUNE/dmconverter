@@ -24,11 +24,11 @@ _SUPPORTED_TYPES = {"E2", "E5"}
 
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
-    # パラメータの名前（内部で使うキー）
     INPUT_FILES = "INPUT_FILES"
     INPUT_FOLDER = "INPUT_FOLDER"
     OUTPUT = "OUTPUT"
     OUTPUT_LOG = "OUTPUT_LOG"
+    STYLE_FOLDER = "STYLE_FOLDER"
 
     def name(self):
         """アルゴリズムの内部ID"""
@@ -47,9 +47,9 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     def shortHelpString(self):
         """ダイアログ右側に表示されるヘルプ文"""
         return (
-            "DMファイルをGeoPackageに変換します。どちらか一方を指定してください。\n"
+            "DMファイルをGeoPackageに変換します。どちらか一方を指定してください。スタイルフォルダを指定すると、変換後にQMLスタイルを自動適用します。\n"
             "単一ファイル処理：DMファイルを指定\n"
-            "複数ファイル処理：フォルダを指定\n"
+            "複数ファイル処理：フォルダを指定\n\n"
         )
 
     def createInstance(self):
@@ -74,6 +74,16 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFile(
                 self.INPUT_FOLDER,
                 "入力：DMファイルが格納されたフォルダ",
+                behavior=QgsProcessingParameterFile.Folder,
+                optional=True,
+            )
+        )
+
+        # オプション: スタイルフォルダ（QML）
+        self.addParameter(
+            QgsProcessingParameterFile(
+                self.STYLE_FOLDER,
+                "入力：スタイルフォルダ（QML）",
                 behavior=QgsProcessingParameterFile.Folder,
                 optional=True,
             )
