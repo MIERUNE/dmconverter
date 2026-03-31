@@ -234,7 +234,6 @@ def _parse_element_group(group: ElementGroup, encoding: str) -> ParsedGroup:
 
 def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
     """図郭レコード(a)からMeshInfoを抽出する。
-
     1行目: M行 — 図郭名の先頭2文字が座標系番号
     """
     line_a = mesh_rows[0].decode(encoding, errors="replace")
@@ -259,7 +258,6 @@ def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
 
 def parse(classified: ClassifiedRecords) -> ParsedDM:
     """分類済みレコードを解析し、構造化データとして返す。
-
     Args:
         classified: classifier.classify() の戻り値
 
