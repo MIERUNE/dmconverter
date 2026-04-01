@@ -18,6 +18,25 @@ class Coordinate:
 
 
 @dataclass(frozen=True)
+class AnnotationInfo:
+    """E7注記の表示情報（後続の注記レコードから取得）"""
+
+    orientation: int  # 縦横区分 (0=横書き, 1=縦書き)
+    angle: int  # 文字列の方向 (度)
+    size: int  # 字大 (0.1mm単位)
+    spacing: int  # 字隔 (0.1mm単位)
+    line_weight: int  # 線号
+    text: str  # 注記データ
+
+
+@dataclass(frozen=True)
+class AttributeInfo:
+    """E8属性データ（後続の属性レコードから取得）"""
+
+    data: str  # 属性データ（生の文字列）
+
+
+@dataclass(frozen=True)
 class ParsedElement:
     """解析済み要素"""
 
@@ -29,6 +48,8 @@ class ParsedElement:
     teni: int  # 転位区分
     kandan: int  # 間断区分
     coordinates: tuple[Coordinate, ...]  # 座標列
+    annotation: AnnotationInfo | None = None  # E7のみ
+    attribute: AttributeInfo | None = None  # E8のみ
 
 
 @dataclass(frozen=True)

@@ -8,6 +8,8 @@ from __future__ import annotations
 from core.dmconverter.classifier import ClassifiedRecords, ElementGroup, ElementRecord
 from core.dmconverter.constants import COORD_FIELD_WIDTH
 from core.dmconverter.parser.models import (
+    AnnotationInfo,
+    AttributeInfo,
     Coordinate,
     MeshInfo,
     ParsedDM,
@@ -97,8 +99,22 @@ def _extract_common_fields(record: str) -> dict:
     }
 
 
+def _build_parsed_element(fields: dict, **kwargs) -> ParsedElement:
+    """共通フィールドからParsedElementを生成するヘルパー。"""
+    return ParsedElement(
+        element_type=fields["element_type"],
+        dm_code=fields["dm_code"],
+        hierarchy=fields["hierarchy"],
+        zukei_kubun=fields["zukei_kubun"],
+        data_kubun=fields["data_kubun"],
+        teni=fields["teni"],
+        kandan=fields["kandan"],
+        **kwargs,
+    )
+
+
 # ---------------------------------------------------------------------------
-# 要素タイプ別パーサー（E1-E6）
+# 要素タイプ別パーサー（E1-E8）
 # ---------------------------------------------------------------------------
 
 
@@ -130,17 +146,7 @@ def _parse_line_area_element(
     """E1-E4（面・線・円・弧）を解析する。座標は後続行から取得。"""
     fields = _extract_common_fields(record)
     coordinates = _parse_coords_from_lines(fields, coord_lines)
-
-    return ParsedElement(
-        element_type=fields["element_type"],
-        dm_code=fields["dm_code"],
-        hierarchy=fields["hierarchy"],
-        zukei_kubun=fields["zukei_kubun"],
-        data_kubun=fields["data_kubun"],
-        teni=fields["teni"],
-        kandan=fields["kandan"],
-        coordinates=coordinates,
-    )
+    return _build_parsed_element(fields, coordinates=coordinates)
 
 
 def _parse_point_element(record: str) -> ParsedElement:
@@ -153,16 +159,7 @@ def _parse_point_element(record: str) -> ParsedElement:
 
     coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
 
-    return ParsedElement(
-        element_type=fields["element_type"],
-        dm_code=fields["dm_code"],
-        hierarchy=fields["hierarchy"],
-        zukei_kubun=fields["zukei_kubun"],
-        data_kubun=fields["data_kubun"],
-        teni=fields["teni"],
-        kandan=fields["kandan"],
-        coordinates=coordinates,
-    )
+    return _build_parsed_element(fields, coordinates=coordinates)
 
 
 def _parse_direction_element(
@@ -170,6 +167,75 @@ def _parse_direction_element(
 ) -> ParsedElement:
     """E6（方向）を解析する。座標は後続行から取得。"""
     return _parse_line_area_element(record, coord_lines)
+
+
+def _parse_annotation_element(
+    record: str, annotation_lines: tuple[str, ...]
+) -> ParsedElement:
+    """E7（注記）を解析する。代表点座標はE行、注記データは後続行から取得。"""
+    fields = _extract_common_fields(record)
+
+    # 代表点座標（E5と同じ位置）
+    x_val = _safe_int(record[35:42])
+    y_val = _safe_int(record[42:49])
+    z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
+    coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
+
+    # 後続注記レコードの解析
+    annotation: AnnotationInfo | None = None
+    if annotation_lines:
+        first = annotation_lines[0]
+        orientation = _safe_int(first[0:1])
+        angle = _safe_int(first[1:8])
+        size = _safe_int(first[8:13])
+        spacing = _safe_int(first[13:18])
+        line_weight = _safe_int(first[18:20])
+
+        # 注記データ（pos 20-83）を全レコードから結合
+        text_parts: list[str] = []
+        for line in annotation_lines:
+            text_parts.append(line[20:84])
+        text = "".join(text_parts).rstrip()
+
+        annotation = AnnotationInfo(
+            orientation=orientation,
+            angle=angle,
+            size=size,
+            spacing=spacing,
+            line_weight=line_weight,
+            text=text,
+        )
+
+    return _build_parsed_element(
+        fields,
+        coordinates=coordinates,
+        annotation=annotation,
+    )
+
+
+def _parse_attribute_element(
+    record: str, attribute_lines: tuple[str, ...]
+) -> ParsedElement:
+    """E8（属性）を解析する。代表点座標はE行、属性データは後続行から取得。"""
+    fields = _extract_common_fields(record)
+
+    # 代表点座標（E5と同じ位置）
+    x_val = _safe_int(record[35:42])
+    y_val = _safe_int(record[42:49])
+    z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
+    coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
+
+    # 後続属性レコードの解析（レコード全体が属性データ）
+    attribute: AttributeInfo | None = None
+    if attribute_lines:
+        data = "".join(attribute_lines).rstrip()
+        attribute = AttributeInfo(data=data)
+
+    return _build_parsed_element(
+        fields,
+        coordinates=coordinates,
+        attribute=attribute,
+    )
 
 
 _COORD_LINE_PARSERS = {
@@ -192,19 +258,11 @@ def _parse_element(elem: ElementRecord, encoding: str) -> ParsedElement:
     if element_type == "5":
         return _parse_point_element(record)
 
-    # E7/E8はPR2で対応。暫定的に座標なしで返す。
-    if element_type in "78":
-        fields = _extract_common_fields(record)
-        return ParsedElement(
-            element_type=fields["element_type"],
-            dm_code=fields["dm_code"],
-            hierarchy=fields["hierarchy"],
-            zukei_kubun=fields["zukei_kubun"],
-            data_kubun=fields["data_kubun"],
-            teni=fields["teni"],
-            kandan=fields["kandan"],
-            coordinates=(),
-        )
+    if element_type == "7":
+        return _parse_annotation_element(record, coord_lines)
+
+    if element_type == "8":
+        return _parse_attribute_element(record, coord_lines)
 
     parser = _COORD_LINE_PARSERS.get(element_type)
     if parser is not None:
@@ -212,16 +270,7 @@ def _parse_element(elem: ElementRecord, encoding: str) -> ParsedElement:
 
     # 未知の要素タイプ
     fields = _extract_common_fields(record)
-    return ParsedElement(
-        element_type=fields["element_type"],
-        dm_code=fields["dm_code"],
-        hierarchy=fields["hierarchy"],
-        zukei_kubun=fields["zukei_kubun"],
-        data_kubun=fields["data_kubun"],
-        teni=fields["teni"],
-        kandan=fields["kandan"],
-        coordinates=(),
-    )
+    return _build_parsed_element(fields, coordinates=())
 
 
 def _parse_element_group(group: ElementGroup, encoding: str) -> ParsedGroup:
