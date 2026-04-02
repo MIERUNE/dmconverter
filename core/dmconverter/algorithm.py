@@ -17,6 +17,7 @@ from qgis.core import (
 )
 
 from .classifier import classify
+from .constants import get_classification_name
 from .parser.parser import parse
 from .reader import read_records
 from .writer import create_layers, save_to_geopackage
@@ -152,28 +153,86 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
 
+        # 変換統計の収集
+        stats = self._collect_stats(parsed)
+
+        # 未変換コードがあれば常に処理パネルに警告表示
+        self._warn_unconverted(stats, feedback)
+
         # ログ出力
         output_log = self.parameterAsBool(parameters, self.OUTPUT_LOG, context)
         if output_log:
-            self._write_log(input_file, output_path, parsed, layers, feedback)
+            self._write_log(input_file, output_path, parsed, layers, stats, feedback)
 
         return {self.OUTPUT: output_path}
 
-    def _write_log(self, input_file, output_path, parsed, layers, feedback):
+    def _collect_stats(self, parsed):
+        """変換統計を収集する。
+
+        Returns:
+            dict with keys:
+                code_counter: Counter of (element_type, dm_code) → count
+                no_coords_count: int
+                type_counter: Counter of element_type → count
+        """
+        code_counter = Counter()
+        type_counter = Counter()
+        no_coords_count = 0
+        for group in parsed.groups:
+            for elem in group.elements:
+                code_counter[(elem.element_type, elem.dm_code)] += 1
+                type_counter[elem.element_type] += 1
+                if not elem.coordinates:
+                    no_coords_count += 1
+        return {
+            "code_counter": code_counter,
+            "type_counter": type_counter,
+            "no_coords_count": no_coords_count,
+        }
+
+    def _warn_unconverted(self, stats, feedback):
+        """未変換コードがあれば処理パネルに警告を表示する。"""
+        code_counter = stats["code_counter"]
+        type_counter = stats["type_counter"]
+
+        # 未対応の要素タイプ
+        unsupported_types = []
+        type_names = {
+            "E1": "面", "E2": "線", "E3": "円", "E4": "弧",
+            "E5": "点", "E6": "方向", "E7": "注記", "E8": "属性",
+        }
+        for et in sorted(type_counter.keys()):
+            if et not in _SUPPORTED_TYPES:
+                name = type_names.get(et, et)
+                unsupported_types.append(f"{et}({name}) {type_counter[et]}件")
+        if unsupported_types:
+            feedback.reportError(
+                f"未対応の要素タイプ: {', '.join(unsupported_types)}"
+            )
+
+        # 未定義の分類コード（対応済み要素タイプだがコード表にない）
+        undefined_codes = []
+        for (et, dm_code), count in sorted(code_counter.items()):
+            if et not in _SUPPORTED_TYPES:
+                continue
+            name = get_classification_name(dm_code)
+            if name == dm_code:
+                undefined_codes.append(f"{dm_code} {count}件")
+        if undefined_codes:
+            feedback.reportError(
+                f"コード表に未定義の分類コード: {', '.join(undefined_codes)}"
+            )
+
+    def _write_log(self, input_file, output_path, parsed, layers, stats, feedback):
         """変換結果のサマリーをテキストファイルに出力する。"""
         input_name = os.path.splitext(os.path.basename(input_file))[0]
         log_path = os.path.join(
             os.path.dirname(output_path), f"{input_name}_log.txt"
         )
 
-        # 要素タイプ別カウント
-        type_counter = Counter()
-        no_coords_count = 0
-        for group in parsed.groups:
-            for elem in group.elements:
-                type_counter[elem.element_type] += 1
-                if not elem.coordinates:
-                    no_coords_count += 1
+        code_counter = stats["code_counter"]
+        type_counter = stats["type_counter"]
+        no_coords_count = stats["no_coords_count"]
 
         total = sum(type_counter.values())
         converted = sum(
@@ -187,7 +246,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             f"図郭名: {parsed.index.map_name}",
             f"地図情報レベル: {parsed.index.scale}",
             "",
-            "要素タイプ別:",
+            "--- 要素タイプ別 ---",
         ]
 
         type_names = {
@@ -206,6 +265,35 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             f"座標なしスキップ: {no_coords_count}件",
             f"出力レイヤ数: {len(layers)}",
         ])
+
+        # 分類コード別変換実績
+        converted_codes = []
+        undefined_codes = []
+        unsupported_codes = []
+        for (et, dm_code), count in sorted(code_counter.items()):
+            name = get_classification_name(dm_code)
+            if et not in _SUPPORTED_TYPES:
+                type_name = type_names.get(et, et)
+                unsupported_codes.append(
+                    f"  {et} {dm_code}({name}): {count}件（要素タイプ{et}({type_name})は未対応）"
+                )
+            elif name == dm_code:
+                undefined_codes.append(
+                    f"  {et} {dm_code}: {count}件（コード表に未定義）"
+                )
+            else:
+                converted_codes.append(f"  {et} {dm_code}({name}): {count}件")
+
+        lines.extend(["", "--- 分類コード別変換実績 ---"])
+        if converted_codes:
+            lines.extend(converted_codes)
+        else:
+            lines.append("  (なし)")
+
+        if undefined_codes or unsupported_codes:
+            lines.extend(["", "--- 未変換の分類コード ---"])
+            lines.extend(undefined_codes)
+            lines.extend(unsupported_codes)
 
         with open(log_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")

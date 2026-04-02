@@ -20,7 +20,7 @@ from qgis.core import (
 )
 from PyQt5.QtCore import QVariant
 
-from .constants import CLASSIFICATIONS
+from .constants import CLASSIFICATIONS, get_classification_name
 from .crs import get_epsg
 from .geometry import to_line_geometry, to_point_geometry
 from .parser.models import ParsedDM, ParsedElement
@@ -60,6 +60,8 @@ def _build_fields() -> QgsFields:
     fields = QgsFields()
     for _, field_name, field_type in _FIELD_DEFS:
         fields.append(QgsField(field_name, field_type))
+        if field_name == "分類コード":
+            fields.append(QgsField("分類名", QVariant.String))
     return fields
 
 
@@ -118,6 +120,8 @@ def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
             feat.setGeometry(geom_func(elem, dm.map_sheet))
             for attr_name, field_name, _ in _FIELD_DEFS:
                 feat.setAttribute(field_name, getattr(elem, attr_name))
+            name = get_classification_name(elem.dm_code)
+            feat.setAttribute("分類名", None if name == elem.dm_code else name)
             features.append(feat)
 
         provider.addFeatures(features)
