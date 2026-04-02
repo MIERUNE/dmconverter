@@ -10,7 +10,7 @@ import enum
 from dataclasses import dataclass
 from typing import Iterator
 
-from core.dmconverter.constants import (
+from .constants import (
     MESH_BASE_ROWS,
     MESH_HISTORY_SET_ROWS,
     REVISION_COUNT_POSITION,
