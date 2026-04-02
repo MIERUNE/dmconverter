@@ -103,21 +103,21 @@ def _parse_coordinate_line_3d(line: str, remaining: int) -> list[Coordinate]:
 def _extract_common_fields(record: str) -> dict:
     """E行から共通フィールドを抽出する。"""
     return {
-        "element_type": record[0:2],       # A2: レコードタイプ
-        "dm_code": record[2:6].strip(),    # I4: 分類コード（レイヤ）
+        "element_type": record[0:2],  # A2: レコードタイプ
+        "dm_code": record[2:6].strip(),  # I4: 分類コード（レイヤ）
         "item_code": record[6:8].strip(),  # I2: 分類コード（項目）
-        "chiiki_bunrui": _safe_int(record[8:10]),   # I2: 地域分類
+        "chiiki_bunrui": _safe_int(record[8:10]),  # I2: 地域分類
         "jouhou_bunrui": _safe_int(record[10:12]),  # I2: 情報分類
-        "element_id": _safe_int(record[12:16]),     # I4: 要素識別番号
-        "hierarchy": _safe_int(record[16:18]),       # I2: 階層レベル
-        "zukei_kubun": _safe_int(record[18:20]),     # I2: 図形区分
-        "data_kubun": _safe_int(record[20:21]),      # I1: 実データ区分
-        "seido_kubun": _safe_int(record[21:23]),     # I2: 精度区分
-        "chuki_kubun": _safe_int(record[23:24]),     # I1: 注記区分
-        "teni": _safe_int(record[24:26]),             # I2: 転位区分
-        "kandan": _safe_int(record[26:27]),           # I1: 間断区分
-        "coord_count": _safe_int(record[27:31]),     # I4: データ数
-        "record_count": _safe_int(record[31:35]),    # I4: レコード数
+        "element_id": _safe_int(record[12:16]),  # I4: 要素識別番号
+        "hierarchy": _safe_int(record[16:18]),  # I2: 階層レベル
+        "zukei_kubun": _safe_int(record[18:20]),  # I2: 図形区分
+        "data_kubun": _safe_int(record[20:21]),  # I1: 実データ区分
+        "seido_kubun": _safe_int(record[21:23]),  # I2: 精度区分
+        "chuki_kubun": _safe_int(record[23:24]),  # I1: 注記区分
+        "teni": _safe_int(record[24:26]),  # I2: 転位区分
+        "kandan": _safe_int(record[26:27]),  # I1: 間断区分
+        "coord_count": _safe_int(record[27:31]),  # I4: データ数
+        "record_count": _safe_int(record[31:35]),  # I4: レコード数
         "acquired_date": _format_date(record[65:69]) if len(record) >= 69 else None,
         "updated_date": _format_date(record[69:73]) if len(record) >= 73 else None,
         "deleted_date": _format_date(record[73:77]) if len(record) >= 77 else None,
