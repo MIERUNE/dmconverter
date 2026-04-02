@@ -4,6 +4,7 @@
 出力: GeoPackageファイル
 """
 
+import glob
 import os
 from collections import Counter
 
@@ -20,10 +21,10 @@ from .classifier import classify
 from .constants import get_classification_name
 from .parser.parser import parse
 from .reader import read_records
-from .writer import create_layers, save_to_geopackage
+from .writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
-_SUPPORTED_TYPES = {"E2", "E5"}
+_SUPPORTED_TYPES = {"E1", "E2", "E5"}
 
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
@@ -113,22 +114,60 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
         """「実行」ボタンを押したときに走る処理の本体"""
         input_file = self.parameterAsFile(parameters, self.INPUT_FILES, context)
+        input_folder = self.parameterAsFile(parameters, self.INPUT_FOLDER, context)
         output_path = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
 
-        if not input_file:
-            feedback.reportError("DMファイルを指定してください")
+        # ファイルリスト構築
+        if input_file:
+            dm_files = [input_file]
+        elif input_folder:
+            dm_files = sorted(glob.glob(os.path.join(input_folder, "*.dm")))
+            if not dm_files:
+                feedback.reportError("フォルダ内にDMファイルが見つかりません")
+                return {self.OUTPUT: output_path}
+            feedback.pushInfo(f"{len(dm_files)}件のDMファイルを検出")
+        else:
+            feedback.reportError("DMファイルまたはフォルダを指定してください")
             return {self.OUTPUT: output_path}
 
-        feedback.pushInfo(f"読み込み中: {input_file}")
-        classified = classify(read_records(input_file))
-        parsed = parse(classified)
+        # 各ファイルを解析（座標系が異なるファイルはスキップ）
+        parsed_list = []
+        base_coord_system = None
+        skipped_files = []
 
-        feedback.pushInfo(
-            f"解析完了: {len(parsed.groups)}グループ, "
-            f"座標系{parsed.mesh_info.coordinate_system}"
-        )
+        for dm_file in dm_files:
+            feedback.pushInfo(f"読み込み中: {dm_file}")
+            classified = classify(read_records(dm_file))
+            parsed = parse(classified)
 
-        layers = create_layers(parsed)
+            if base_coord_system is None:
+                base_coord_system = parsed.mesh_info.coordinate_system
+            elif parsed.mesh_info.coordinate_system != base_coord_system:
+                skipped_files.append(
+                    f"{os.path.basename(dm_file)}"
+                    f"(座標系{parsed.mesh_info.coordinate_system})"
+                )
+                continue
+
+            feedback.pushInfo(
+                f"解析完了: {os.path.basename(dm_file)} "
+                f"{len(parsed.groups)}グループ, "
+                f"座標系{parsed.mesh_info.coordinate_system}"
+            )
+            parsed_list.append(parsed)
+
+        if skipped_files:
+            feedback.reportError(
+                f"座標系が異なるためスキップ（基準: 座標系{base_coord_system}）: "
+                f"{', '.join(skipped_files)}"
+            )
+
+        if not parsed_list:
+            feedback.reportError("変換可能なDMファイルがありません")
+            return {self.OUTPUT: output_path}
+
+        # レイヤ作成（複数ファイルの同名レイヤはマージ）
+        layers = create_merged_layers(parsed_list)
         feedback.pushInfo(f"レイヤ作成完了: {len(layers)}レイヤ")
 
         save_to_geopackage(layers, output_path)
@@ -153,8 +192,8 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
 
-        # 変換統計の収集
-        stats = self._collect_stats(parsed)
+        # 変換統計の収集（全ファイル分を集約）
+        stats = self._collect_stats_multi(parsed_list)
 
         # 未変換コードがあれば常に処理パネルに警告表示
         self._warn_unconverted(stats, feedback)
@@ -162,12 +201,13 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         # ログ出力
         output_log = self.parameterAsBool(parameters, self.OUTPUT_LOG, context)
         if output_log:
-            self._write_log(input_file, output_path, parsed, layers, stats, feedback)
+            first_file = dm_files[0]
+            self._write_log(first_file, output_path, parsed_list[0], layers, stats, feedback)
 
         return {self.OUTPUT: output_path}
 
-    def _collect_stats(self, parsed):
-        """変換統計を収集する。
+    def _collect_stats_multi(self, parsed_list):
+        """複数ParsedDMから変換統計を収集する。
 
         Returns:
             dict with keys:
@@ -178,12 +218,13 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         code_counter = Counter()
         type_counter = Counter()
         no_coords_count = 0
-        for group in parsed.groups:
-            for elem in group.elements:
-                code_counter[(elem.element_type, elem.dm_code)] += 1
-                type_counter[elem.element_type] += 1
-                if not elem.coordinates:
-                    no_coords_count += 1
+        for parsed in parsed_list:
+            for group in parsed.groups:
+                for elem in group.elements:
+                    code_counter[(elem.element_type, elem.dm_code)] += 1
+                    type_counter[elem.element_type] += 1
+                    if not elem.coordinates:
+                        no_coords_count += 1
         return {
             "code_counter": code_counter,
             "type_counter": type_counter,
