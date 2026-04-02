@@ -20,10 +20,10 @@ from qgis.core import (
 )
 from PyQt5.QtCore import QVariant
 
-from core.dmconverter.constants import CLASSIFICATIONS
-from core.dmconverter.crs import get_epsg
-from core.dmconverter.geometry import to_line_geometry, to_point_geometry
-from core.dmconverter.parser.models import ParsedDM, ParsedElement
+from .constants import CLASSIFICATIONS
+from .crs import get_epsg
+from .geometry import to_line_geometry, to_point_geometry
+from .parser.models import ParsedDM, ParsedElement
 
 # 要素タイプ → (ジオメトリタイプ名, WKBタイプ, ジオメトリ変換関数)
 _ELEMENT_TYPE_MAP = {

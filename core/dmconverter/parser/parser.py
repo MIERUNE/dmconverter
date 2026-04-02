@@ -5,9 +5,9 @@
 
 from __future__ import annotations
 
-from core.dmconverter.classifier import ClassifiedRecords, ElementGroup, ElementRecord
-from core.dmconverter.constants import COORD_FIELD_WIDTH
-from core.dmconverter.parser.models import (
+from ..classifier import ClassifiedRecords, ElementGroup, ElementRecord
+from ..constants import COORD_FIELD_WIDTH
+from .models import (
     AnnotationInfo,
     AttributeInfo,
     Coordinate,
@@ -78,7 +78,7 @@ def _parse_coordinate_line_2d(line: str, remaining: int) -> list[Coordinate]:
 def _parse_coordinate_line_3d(line: str, remaining: int) -> list[Coordinate]:
     """座標行から3D座標を固定7文字フィールドで抽出する。
 
-    1行に最大4組の(x, y, z)トリプルが格納されている。
+    1行に最大4組の(x, y, z)が格納されている。
     """
     coords: list[Coordinate] = []
     w = COORD_FIELD_WIDTH
@@ -101,10 +101,7 @@ def _parse_coordinate_line_3d(line: str, remaining: int) -> list[Coordinate]:
 
 
 def _extract_common_fields(record: str) -> dict:
-    """E行から共通フィールドを抽出する。
-
-    バイト位置はfuroku8-1.pdf p.8「要素レコード」およびPSEA出力との照合に基づく。
-    """
+    """E行から共通フィールドを抽出する。"""
     return {
         "element_type": record[0:2],       # A2: レコードタイプ
         "dm_code": record[2:6].strip(),    # I4: 分類コード（レイヤ）

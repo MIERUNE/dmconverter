@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from qgis.core import QgsGeometry, QgsPointXY
 
-from core.dmconverter.parser.models import Coordinate, MapSheetInfo, ParsedElement
+from .parser.models import Coordinate, MapSheetInfo, ParsedElement
 
 # 座標値の単位コード → メートルへの除数
 _UNIT_DIVISORS = {

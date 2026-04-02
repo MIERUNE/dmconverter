@@ -16,10 +16,10 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
-from core.dmconverter.classifier import classify
-from core.dmconverter.parser.parser import parse
-from core.dmconverter.reader import read_records
-from core.dmconverter.writer import create_layers, save_to_geopackage
+from .classifier import classify
+from .parser.parser import parse
+from .reader import read_records
+from .writer import create_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
 _SUPPORTED_TYPES = {"E2", "E5"}
