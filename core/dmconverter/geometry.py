@@ -28,6 +28,10 @@ def _to_abs_point(coord: Coordinate, map_sheet: MapSheetInfo) -> QgsPointXY:
 
     DM: X=北, Y=東 → GIS: X=東, Y=北 に入れ替え。
     """
+    if map_sheet.coord_unit not in _UNIT_DIVISORS:
+        raise ValueError(
+            f"未対応の座標単位コードです: {map_sheet.coord_unit}（対応: {list(_UNIT_DIVISORS.keys())}）"
+        )
     divisor = _UNIT_DIVISORS[map_sheet.coord_unit]
     gis_x = map_sheet.origin_y + coord.y / divisor
     gis_y = map_sheet.origin_x + coord.x / divisor

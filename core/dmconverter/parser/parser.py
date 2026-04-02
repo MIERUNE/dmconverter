@@ -43,7 +43,7 @@ def _format_date(raw: str) -> str | None:
     例: "1703" → "2017/03", "0000" → None
     """
     stripped = raw.strip()
-    if not stripped or stripped == "0000":
+    if not stripped or stripped == "0000" or not stripped.isdigit():
         return None
     yy = stripped[:2]
     mm = stripped[2:4]

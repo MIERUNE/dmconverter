@@ -87,7 +87,7 @@ class TestParseCoordinateLine3d(unittest.TestCase):
 class TestExtractCommonFields(unittest.TestCase):
     def test_e2_record(self):
         """E2レコードから共通フィールドを抽出する"""
-        record = "E22101 0   0   1 2152350 00  80  14      0      0      0 0       170300000000      1"
+        record = "E22101 0 0 0   0 1212 00 00  80  14      0      0      0 0       170300000000      1"
         fields = _extract_common_fields(record)
         self.assertEqual(fields["element_type"], "E2")
         self.assertEqual(fields["dm_code"], "2101")
