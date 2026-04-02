@@ -22,11 +22,12 @@ from PyQt5.QtCore import QVariant
 
 from .constants import CLASSIFICATIONS, get_classification_name
 from .crs import get_epsg
-from .geometry import to_line_geometry, to_point_geometry
-from .parser.models import ParsedDM, ParsedElement
+from .geometry import to_line_geometry, to_point_geometry, to_polygon_geometry
+from .parser.models import MapSheetInfo, ParsedDM, ParsedElement
 
 # 要素タイプ → (ジオメトリタイプ名, WKBタイプ, ジオメトリ変換関数)
 _ELEMENT_TYPE_MAP = {
+    "E1": ("面", QgsWkbTypes.Polygon, to_polygon_geometry),
     "E2": ("線", QgsWkbTypes.LineString, to_line_geometry),
     "E5": ("点", QgsWkbTypes.Point, to_point_geometry),
 }
@@ -75,26 +76,46 @@ def _get_group_name(layer_code: str) -> str:
 
 def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
     """ParsedDM から上位2桁グループ×ジオメトリタイプ別のメモリレイヤを作成する。"""
-    epsg = get_epsg(dm.mesh_info.coordinate_system)
+    return create_merged_layers([dm])
+
+
+def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
+    """複数ParsedDMからレイヤをマージして作成する。
+
+    同じ分類コード上位2桁×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
+    CRSは最初のParsedDMの座標系を使用する。
+    各要素のジオメトリ変換にはそれぞれのファイルのmap_sheetを使用する。
+    """
+    if not dm_list:
+        return []
+
+    first_dm = dm_list[0]
+    epsg = get_epsg(first_dm.mesh_info.coordinate_system)
     crs = QgsCoordinateReferenceSystem(f"EPSG:{epsg}")
 
-    # (layer_code, geom_type_name) → [elements]
-    groups: dict[tuple[str, str], list[ParsedElement]] = defaultdict(list)
+    # (layer_code, geom_type_name) → [(element, map_sheet)]
+    groups: dict[
+        tuple[str, str], list[tuple[ParsedElement, MapSheetInfo]]
+    ] = defaultdict(list)
 
-    for group in dm.groups:
-        for elem in group.elements:
-            type_info = _ELEMENT_TYPE_MAP.get(elem.element_type)
-            if type_info is None:
-                continue
-            geom_type_name = type_info[0]
-            layer_code = elem.dm_code[:2]
-            groups[(layer_code, geom_type_name)].append(elem)
+    for dm in dm_list:
+        for group in dm.groups:
+            for elem in group.elements:
+                type_info = _ELEMENT_TYPE_MAP.get(elem.element_type)
+                if type_info is None:
+                    continue
+                geom_type_name = type_info[0]
+                layer_code = elem.dm_code[:2]
+                groups[(layer_code, geom_type_name)].append(
+                    (elem, dm.map_sheet)
+                )
 
     layers: list[QgsVectorLayer] = []
     fields = _build_fields()
 
-    for (layer_code, geom_type_name), elements in groups.items():
-        type_info = _ELEMENT_TYPE_MAP[elements[0].element_type]
+    for (layer_code, geom_type_name), elem_pairs in groups.items():
+        first_elem = elem_pairs[0][0]
+        type_info = _ELEMENT_TYPE_MAP[first_elem.element_type]
         wkb_type = type_info[1]
         geom_func = type_info[2]
 
@@ -113,11 +134,11 @@ def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
 
         # フィーチャ追加
         features: list[QgsFeature] = []
-        for elem in elements:
+        for elem, map_sheet in elem_pairs:
             if not elem.coordinates:
                 continue
             feat = QgsFeature(layer.fields())
-            feat.setGeometry(geom_func(elem, dm.map_sheet))
+            feat.setGeometry(geom_func(elem, map_sheet))
             for attr_name, field_name, _ in _FIELD_DEFS:
                 feat.setAttribute(field_name, getattr(elem, attr_name))
             name = get_classification_name(elem.dm_code)

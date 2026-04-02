@@ -48,3 +48,11 @@ def to_line_geometry(
     """E2要素からLineString geometryを生成する。"""
     points = [_to_abs_point(c, map_sheet) for c in element.coordinates]
     return QgsGeometry.fromPolylineXY(points)
+
+
+def to_polygon_geometry(
+    element: ParsedElement, map_sheet: MapSheetInfo
+) -> QgsGeometry:
+    """E1要素からPolygon geometryを生成する。"""
+    points = [_to_abs_point(c, map_sheet) for c in element.coordinates]
+    return QgsGeometry.fromPolygonXY([points])
