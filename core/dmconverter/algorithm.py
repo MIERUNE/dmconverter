@@ -4,21 +4,27 @@
 出力: GeoPackageファイル
 """
 
+import glob
+import os
 from collections import Counter
 
 from qgis.core import (
+    QgsCoordinateTransform,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
+    QgsProcessingParameterBoolean,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
+    QgsRectangle,
     QgsVectorLayer,
 )
 
-from .classifier import classify
 from .constants import get_classification_name
+from .parser.classifier import classify
 from .parser.parser import parse
-from .reader import read_records
-from .writer import create_layers, save_to_geopackage
+from .parser.reader import read_records
+from .writer.log_writer import write_log
+from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
 _SUPPORTED_TYPES = {"E2", "E5"}
@@ -28,6 +34,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     INPUT_FILES = "INPUT_FILES"
     INPUT_FOLDER = "INPUT_FOLDER"
     OUTPUT = "OUTPUT"
+    OUTPUT_LOG = "OUTPUT_LOG"
     STYLE_FOLDER = "STYLE_FOLDER"
 
     def name(self):
@@ -89,6 +96,15 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        # オプション: 変換ログ出力
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.OUTPUT_LOG,
+                "変換ログを出力する",
+                defaultValue=False,
+            )
+        )
+
         # 出力: GeoPackageファイル
         self.addParameter(
             QgsProcessingParameterFileDestination(
@@ -101,22 +117,60 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
         """「実行」ボタンを押したときに走る処理の本体"""
         input_file = self.parameterAsFile(parameters, self.INPUT_FILES, context)
+        input_folder = self.parameterAsFile(parameters, self.INPUT_FOLDER, context)
         output_path = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
 
-        if not input_file:
-            feedback.reportError("DMファイルを指定してください")
+        # ファイルリスト構築
+        if input_file:
+            dm_files = [input_file]
+        elif input_folder:
+            dm_files = sorted(glob.glob(os.path.join(input_folder, "*.dm")))
+            if not dm_files:
+                feedback.reportError("フォルダ内にDMファイルが見つかりません")
+                return {self.OUTPUT: output_path}
+            feedback.pushInfo(f"{len(dm_files)}件のDMファイルを検出")
+        else:
+            feedback.reportError("DMファイルまたはフォルダを指定してください")
             return {self.OUTPUT: output_path}
 
-        feedback.pushInfo(f"読み込み中: {input_file}")
-        classified = classify(read_records(input_file))
-        parsed = parse(classified)
+        # 各ファイルを解析（座標系が異なるファイルはスキップ）
+        parsed_list = []
+        base_coord_system = None
+        skipped_files = []
 
-        feedback.pushInfo(
-            f"解析完了: {len(parsed.groups)}グループ, "
-            f"座標系{parsed.mesh_info.coordinate_system}"
-        )
+        for dm_file in dm_files:
+            feedback.pushInfo(f"読み込み中: {dm_file}")
+            classified = classify(read_records(dm_file))
+            parsed = parse(classified)
 
-        layers = create_layers(parsed)
+            if base_coord_system is None:
+                base_coord_system = parsed.mesh_info.coordinate_system
+            elif parsed.mesh_info.coordinate_system != base_coord_system:
+                skipped_files.append(
+                    f"{os.path.basename(dm_file)}"
+                    f"(座標系{parsed.mesh_info.coordinate_system})"
+                )
+                continue
+
+            feedback.pushInfo(
+                f"解析完了: {os.path.basename(dm_file)} "
+                f"{len(parsed.groups)}グループ, "
+                f"座標系{parsed.mesh_info.coordinate_system}"
+            )
+            parsed_list.append(parsed)
+
+        if skipped_files:
+            feedback.reportError(
+                f"座標系が異なるためスキップ（基準: 座標系{base_coord_system}）: "
+                f"{', '.join(skipped_files)}"
+            )
+
+        if not parsed_list:
+            feedback.reportError("変換可能なDMファイルがありません")
+            return {self.OUTPUT: output_path}
+
+        # レイヤ作成（複数ファイルの同名レイヤはマージ）
+        layers = create_merged_layers(parsed_list)
         feedback.pushInfo(f"レイヤ作成完了: {len(layers)}レイヤ")
 
         write_errors = save_to_geopackage(layers, output_path)
@@ -126,20 +180,14 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             return {self.OUTPUT: output_path}
         feedback.pushInfo(f"GeoPackage出力完了: {output_path}")
 
-        # 未対応要素タイプの警告
-        stats = self._collect_stats([parsed])
-        self._warn_unconverted(stats, feedback)
-
         # レイヤーをプロジェクトに追加
+        combined_extent = QgsRectangle()
         for layer in layers:
             gpkg_layer = QgsVectorLayer(
                 f"{output_path}|layername={layer.name()}",
                 layer.name(),
                 "ogr",
             )
-            if not gpkg_layer.isValid():
-                feedback.reportError(f"レイヤの読み込みに失敗しました: {layer.name()}")
-                continue
             context.addLayerToLoadOnCompletion(
                 gpkg_layer.id(),
                 QgsProcessingContext.LayerDetails(
@@ -150,22 +198,82 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             )
             context.temporaryLayerStore().addMapLayer(gpkg_layer)
 
+            layer_extent = gpkg_layer.extent()
+            if not layer_extent.isEmpty():
+                if combined_extent.isEmpty():
+                    combined_extent = QgsRectangle(layer_extent)
+                else:
+                    combined_extent.combineExtentWith(layer_extent)
+
+        self._combined_extent = combined_extent
+        self._layer_crs = gpkg_layer.crs()
+
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
+
+        # 変換統計の収集（全ファイル分を集約）
+        stats = self._collect_stats(parsed_list)
+
+        # 未変換コードがあれば常に処理パネルに警告表示
+        self._warn_unconverted(stats, feedback)
+
+        # ログ出力
+        output_log = self.parameterAsBool(parameters, self.OUTPUT_LOG, context)
+        if output_log:
+            log_path = write_log(
+                dm_files[0], output_path, parsed_list[0],
+                layers, stats, _SUPPORTED_TYPES,
+            )
+            feedback.pushInfo(f"変換ログ出力: {log_path}")
 
         return {self.OUTPUT: output_path}
 
+    def postProcessAlgorithm(self, context, feedback):
+        """レイヤ読み込み後にマップキャンバスを全体表示にズームする。"""
+        from qgis.utils import iface
+
+        if iface is None or not hasattr(self, "_combined_extent"):
+            return {}
+        if self._combined_extent.isEmpty():
+            return {}
+
+        canvas = iface.mapCanvas()
+        dest_crs = canvas.mapSettings().destinationCrs()
+        if dest_crs != self._layer_crs:
+            transform = QgsCoordinateTransform(
+                self._layer_crs, dest_crs, context.project()
+            )
+            extent = transform.transformBoundingBox(self._combined_extent)
+        else:
+            extent = QgsRectangle(self._combined_extent)
+
+        extent.scale(1.05)
+        canvas.setExtent(extent)
+        canvas.refresh()
+        return {}
+
     def _collect_stats(self, parsed_list):
-        """ParsedDMリストから変換統計を収集する。"""
+        """複数ParsedDMから変換統計を収集する。
+
+        Returns:
+            以下のキーを持つ辞書を返す:
+                code_counter: Counter of (element_type, dm_code) → count
+                no_coords_count: int
+                type_counter: Counter of element_type → count
+        """
         code_counter = Counter()
         type_counter = Counter()
+        no_coords_count = 0
         for parsed in parsed_list:
             for group in parsed.groups:
                 for elem in group.elements:
                     code_counter[(elem.element_type, elem.dm_code)] += 1
                     type_counter[elem.element_type] += 1
+                    if not elem.coordinates:
+                        no_coords_count += 1
         return {
             "code_counter": code_counter,
             "type_counter": type_counter,
+            "no_coords_count": no_coords_count,
         }
 
     def _warn_unconverted(self, stats, feedback):
@@ -203,3 +311,4 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError(
                 f"コード表に未定義の分類コード: {', '.join(undefined)}"
             )
+
