@@ -20,10 +20,10 @@ from qgis.core import (
     QgsWkbTypes,
 )
 
-from .constants import CLASSIFICATIONS, get_classification_name
+from ..constants import CLASSIFICATIONS, get_classification_name
+from ..parser.models import MapSheetInfo, ParsedDM, ParsedElement
 from .crs import get_epsg
 from .geometry import to_line_geometry, to_point_geometry
-from .parser.models import MapSheetInfo, ParsedDM, ParsedElement
 
 # 要素タイプ → (ジオメトリタイプ名, WKBタイプ, ジオメトリ変換関数)
 _ELEMENT_TYPE_MAP = {

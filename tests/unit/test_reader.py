@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from core.dmconverter.reader import detect_encoding, read_records
+from core.dmconverter.parser.reader import detect_encoding, read_records
 
 
 # テスト用DMファイルのパス
