@@ -149,10 +149,17 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
     return layers
 
 
-def save_to_geopackage(layers: list[QgsVectorLayer], output_path: str) -> None:
-    """メモリレイヤをGeoPackageに書き出す。"""
+def save_to_geopackage(
+    layers: list[QgsVectorLayer], output_path: str
+) -> list[str]:
+    """メモリレイヤをGeoPackageに書き出す。
+
+    Returns:
+        書き出しに失敗したレイヤのエラーメッセージのリスト（成功時は空リスト）
+    """
+    errors: list[str] = []
     if not layers:
-        return
+        return errors
 
     # 既存ファイルがあれば削除（上書き）
     if os.path.exists(output_path):
@@ -173,3 +180,7 @@ def save_to_geopackage(layers: list[QgsVectorLayer], output_path: str) -> None:
                 options,
             )
         )
+        if _error != QgsVectorFileWriter.NoError:
+            errors.append(f"{layer.name()}: {_msg}")
+
+    return errors

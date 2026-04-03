@@ -8,6 +8,7 @@ from core.dmconverter.parser.models import (
 )
 from core.dmconverter.parser.parser import (
     _extract_common_fields,
+    _format_date,
     _parse_annotation_element,
     _parse_attribute_element,
     _parse_coordinate_line_2d,
@@ -47,6 +48,44 @@ class TestSafeInt(unittest.TestCase):
 
     def test_custom_default(self):
         self.assertEqual(_safe_int("", default=-1), -1)
+
+
+class TestFormatDate(unittest.TestCase):
+    def test_normal_date(self):
+        """正常な4桁日付をYYYY/MM形式に変換する"""
+        self.assertEqual(_format_date("1703"), "2017/03")
+
+    def test_20th_century(self):
+        """50以上の年は19xx年として扱う"""
+        self.assertEqual(_format_date("9901"), "1999/01")
+
+    def test_zero_date(self):
+        """0000はNoneを返す"""
+        self.assertIsNone(_format_date("0000"))
+
+    def test_empty_string(self):
+        """空文字はNoneを返す"""
+        self.assertIsNone(_format_date(""))
+
+    def test_invalid_month_13(self):
+        """月が13以上はNoneを返す"""
+        self.assertIsNone(_format_date("1713"))
+
+    def test_invalid_month_00(self):
+        """月が00はNoneを返す"""
+        self.assertIsNone(_format_date("1700"))
+
+    def test_short_string(self):
+        """3桁以下はNoneを返す"""
+        self.assertIsNone(_format_date("123"))
+
+    def test_non_digit(self):
+        """数字以外はNoneを返す"""
+        self.assertIsNone(_format_date("abcd"))
+
+    def test_spaces(self):
+        """空白のみはNoneを返す"""
+        self.assertIsNone(_format_date("    "))
 
 
 class TestParseCoordinateLine2d(unittest.TestCase):

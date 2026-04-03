@@ -119,7 +119,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         layers = create_layers(parsed)
         feedback.pushInfo(f"レイヤ作成完了: {len(layers)}レイヤ")
 
-        save_to_geopackage(layers, output_path)
+        write_errors = save_to_geopackage(layers, output_path)
+        if write_errors:
+            for err in write_errors:
+                feedback.reportError(f"GeoPackage書き出し失敗: {err}")
+            return {self.OUTPUT: output_path}
         feedback.pushInfo(f"GeoPackage出力完了: {output_path}")
 
         # 未対応要素タイプの警告
@@ -133,6 +137,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 layer.name(),
                 "ogr",
             )
+            if not gpkg_layer.isValid():
+                feedback.reportError(
+                    f"レイヤの読み込みに失敗しました: {layer.name()}"
+                )
+                continue
             context.addLayerToLoadOnCompletion(
                 gpkg_layer.id(),
                 QgsProcessingContext.LayerDetails(
