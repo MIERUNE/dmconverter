@@ -9,11 +9,13 @@ import os
 from collections import Counter
 
 from qgis.core import (
+    QgsCoordinateTransform,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
+    QgsRectangle,
     QgsVectorLayer,
 )
 
@@ -174,6 +176,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo(f"GeoPackage出力完了: {output_path}")
 
         # レイヤーをプロジェクトに追加
+        combined_extent = QgsRectangle()
         for layer in layers:
             gpkg_layer = QgsVectorLayer(
                 f"{output_path}|layername={layer.name()}",
@@ -190,6 +193,16 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             )
             context.temporaryLayerStore().addMapLayer(gpkg_layer)
 
+            layer_extent = gpkg_layer.extent()
+            if not layer_extent.isEmpty():
+                if combined_extent.isEmpty():
+                    combined_extent = QgsRectangle(layer_extent)
+                else:
+                    combined_extent.combineExtentWith(layer_extent)
+
+        self._combined_extent = combined_extent
+        self._layer_crs = gpkg_layer.crs()
+
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
 
         # 変換統計の収集（全ファイル分を集約）
@@ -205,6 +218,30 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             self._write_log(first_file, output_path, parsed_list[0], layers, stats, feedback)
 
         return {self.OUTPUT: output_path}
+
+    def postProcessAlgorithm(self, context, feedback):
+        """レイヤ読み込み後にマップキャンバスを全体表示にズームする。"""
+        from qgis.utils import iface
+
+        if iface is None or not hasattr(self, "_combined_extent"):
+            return {}
+        if self._combined_extent.isEmpty():
+            return {}
+
+        canvas = iface.mapCanvas()
+        dest_crs = canvas.mapSettings().destinationCrs()
+        if dest_crs != self._layer_crs:
+            transform = QgsCoordinateTransform(
+                self._layer_crs, dest_crs, context.project()
+            )
+            extent = transform.transformBoundingBox(self._combined_extent)
+        else:
+            extent = QgsRectangle(self._combined_extent)
+
+        extent.scale(1.05)
+        canvas.setExtent(extent)
+        canvas.refresh()
+        return {}
 
     def _collect_stats_multi(self, parsed_list):
         """複数ParsedDMから変換統計を収集する。
