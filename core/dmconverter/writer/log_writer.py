@@ -24,7 +24,7 @@ _TYPE_NAMES = {
 
 
 def write_log(
-    input_file,
+    dm_files,
     output_path,
     parsed,
     layers,
@@ -32,12 +32,16 @@ def write_log(
     supported_types,
     geom_fail_counter=None,
     errors=None,
+    skipped_files=None,
 ):
     """変換結果のサマリーをテキストファイルに出力する。
 
     Args:
+        dm_files: 入力DMファイルパスのリスト
+        parsed: 最初のParsedDM（座標系情報の取得用）
         geom_fail_counter: Counter of (element_type, dm_code) → ジオメトリ変換失敗件数
         errors: 個別エラーメッセージのリスト
+        skipped_files: 座標系不一致でスキップされたファイルの説明リスト
 
     Returns:
         ログファイルのパス
@@ -46,8 +50,11 @@ def write_log(
         geom_fail_counter = Counter()
     if errors is None:
         errors = []
+    if skipped_files is None:
+        skipped_files = []
 
-    input_name = os.path.splitext(os.path.basename(input_file))[0]
+    first_file = dm_files[0]
+    input_name = os.path.splitext(os.path.basename(first_file))[0]
     log_path = os.path.join(os.path.dirname(output_path), f"{input_name}_log.txt")
 
     code_counter = stats["code_counter"]
@@ -61,15 +68,29 @@ def write_log(
     no_coords_total = sum(no_coords_counter.values())
     geom_fail_total = sum(geom_fail_counter.values())
 
-    lines = [
-        "=== DM変換ログ ===",
-        f"入力: {os.path.basename(input_file)}",
-        f"座標系: {parsed.mesh_info.coordinate_system} (EPSG:{6668 + parsed.mesh_info.coordinate_system})",
-        f"図郭名: {parsed.mesh_info.map_name}",
-        f"地図情報レベル: {parsed.mesh_info.scale}",
-        "",
-        "--- 要素タイプ別 ---",
-    ]
+    lines = ["=== DM変換ログ ==="]
+
+    # 入力ファイル情報
+    if len(dm_files) == 1:
+        lines.append(f"入力: {os.path.basename(first_file)}")
+    else:
+        lines.append(f"入力: フォルダ指定 ({len(dm_files)}ファイル)")
+        for f in dm_files:
+            lines.append(f"  {os.path.basename(f)}")
+        if skipped_files:
+            lines.append(f"スキップ ({len(skipped_files)}ファイル, 座標系不一致):")
+            for sf in skipped_files:
+                lines.append(f"  {sf}")
+
+    lines.extend(
+        [
+            f"座標系: {parsed.mesh_info.coordinate_system} (EPSG:{6668 + parsed.mesh_info.coordinate_system})",
+            f"図郭名: {parsed.mesh_info.map_name}",
+            f"地図情報レベル: {parsed.mesh_info.scale}",
+            "",
+            "--- 要素タイプ別 ---",
+        ]
+    )
 
     for et in sorted(type_counter.keys()):
         count = type_counter[et]
