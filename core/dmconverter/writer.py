@@ -149,9 +149,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
     return layers
 
 
-def save_to_geopackage(
-    layers: list[QgsVectorLayer], output_path: str
-) -> list[str]:
+def save_to_geopackage(layers: list[QgsVectorLayer], output_path: str) -> list[str]:
     """メモリレイヤをGeoPackageに書き出す。
 
     Returns:

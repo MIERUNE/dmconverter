@@ -138,9 +138,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 "ogr",
             )
             if not gpkg_layer.isValid():
-                feedback.reportError(
-                    f"レイヤの読み込みに失敗しました: {layer.name()}"
-                )
+                feedback.reportError(f"レイヤの読み込みに失敗しました: {layer.name()}")
                 continue
             context.addLayerToLoadOnCompletion(
                 gpkg_layer.id(),
@@ -176,8 +174,14 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         code_counter = stats["code_counter"]
 
         type_names = {
-            "E1": "面", "E2": "線", "E3": "円", "E4": "弧",
-            "E5": "点", "E6": "方向", "E7": "注記", "E8": "属性",
+            "E1": "面",
+            "E2": "線",
+            "E3": "円",
+            "E4": "弧",
+            "E5": "点",
+            "E6": "方向",
+            "E7": "注記",
+            "E8": "属性",
         }
 
         unsupported = []
@@ -186,9 +190,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 name = type_names.get(et, et)
                 unsupported.append(f"{et}({name}) {type_counter[et]}件")
         if unsupported:
-            feedback.reportError(
-                f"未対応の要素タイプ: {', '.join(unsupported)}"
-            )
+            feedback.reportError(f"未対応の要素タイプ: {', '.join(unsupported)}")
 
         undefined = []
         for (et, dm_code), count in sorted(code_counter.items()):
