@@ -42,12 +42,23 @@ class ParsedElement:
 
     element_type: str  # "E1"-"E8"
     dm_code: str  # 4桁分類コード
+    item_code: str  # 分類コード項目（2桁）
+    chiiki_bunrui: int  # 地域分類
+    jouhou_bunrui: int  # 情報分類
+    element_id: int  # 要素識別番号
     hierarchy: int  # 階層レベル
     zukei_kubun: int  # 図形区分
     data_kubun: int  # データ区分（2=2D, 3=3D）
+    seido_kubun: int  # 精度区分
+    chuki_kubun: int  # 注記区分
     teni: int  # 転位区分
     kandan: int  # 間断区分
     coordinates: tuple[Coordinate, ...]  # 座標列
+    attribute_value: int = 0  # 属性数値（標高値等）
+    zokusei_kubun: int = 0  # 属性区分
+    acquired_date: str | None = None  # 取得年月（YYYY/MM or None）
+    updated_date: str | None = None  # 更新取得年月（YYYY/MM or None）
+    deleted_date: str | None = None  # 消去年月（YYYY/MM or None）
     annotation: AnnotationInfo | None = None  # E7のみ
     attribute: AttributeInfo | None = None  # E8のみ
 
@@ -70,8 +81,20 @@ class MeshInfo:
 
 
 @dataclass(frozen=True)
+class MapSheetInfo:
+    """図郭情報（図郭レコード(b)から取得）"""
+
+    origin_x: int  # 左下図郭座標 X (メートル)
+    origin_y: int  # 左下図郭座標 Y (メートル)
+    upper_x: int  # 右上図郭座標 X (メートル)
+    upper_y: int  # 右上図郭座標 Y (メートル)
+    coord_unit: int  # 座標値の単位 (1=mm, 10=cm, 999=m)
+
+
+@dataclass(frozen=True)
 class ParsedDM:
     """解析済みDMデータ（parserの最終出力）"""
 
     mesh_info: MeshInfo
+    map_sheet: MapSheetInfo
     groups: tuple[ParsedGroup, ...]
