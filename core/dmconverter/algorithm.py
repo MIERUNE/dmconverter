@@ -170,8 +170,13 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             return {self.OUTPUT: output_path}
 
         # レイヤ作成（複数ファイルの同名レイヤはマージ）
-        layers = create_merged_layers(parsed_list)
+        merge_result = create_merged_layers(parsed_list)
+        layers = merge_result.layers
         feedback.pushInfo(f"レイヤ作成完了: {len(layers)}レイヤ")
+
+        if merge_result.errors:
+            for err in merge_result.errors:
+                feedback.reportError(f"ジオメトリ変換エラー: {err}")
 
         write_errors = save_to_geopackage(layers, output_path)
         if write_errors:
@@ -222,6 +227,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             log_path = write_log(
                 dm_files[0], output_path, parsed_list[0],
                 layers, stats, _SUPPORTED_TYPES,
+                merge_result.geom_fail_counter, merge_result.errors,
             )
             feedback.pushInfo(f"変換ログ出力: {log_path}")
 
@@ -257,23 +263,23 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         Returns:
             以下のキーを持つ辞書を返す:
                 code_counter: Counter of (element_type, dm_code) → count
-                no_coords_count: int
                 type_counter: Counter of element_type → count
+                no_coords_counter: Counter of (element_type, dm_code) → count
         """
         code_counter = Counter()
         type_counter = Counter()
-        no_coords_count = 0
+        no_coords_counter = Counter()
         for parsed in parsed_list:
             for group in parsed.groups:
                 for elem in group.elements:
                     code_counter[(elem.element_type, elem.dm_code)] += 1
                     type_counter[elem.element_type] += 1
                     if not elem.coordinates:
-                        no_coords_count += 1
+                        no_coords_counter[(elem.element_type, elem.dm_code)] += 1
         return {
             "code_counter": code_counter,
             "type_counter": type_counter,
-            "no_coords_count": no_coords_count,
+            "no_coords_counter": no_coords_counter,
         }
 
     def _warn_unconverted(self, stats, feedback):

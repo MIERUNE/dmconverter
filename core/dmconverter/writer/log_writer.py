@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+from collections import Counter
 
 from ..constants import get_classification_name
 
@@ -22,23 +23,43 @@ _TYPE_NAMES = {
 }
 
 
-def write_log(input_file, output_path, parsed, layers, stats, supported_types):
+def write_log(
+    input_file,
+    output_path,
+    parsed,
+    layers,
+    stats,
+    supported_types,
+    geom_fail_counter=None,
+    errors=None,
+):
     """変換結果のサマリーをテキストファイルに出力する。
+
+    Args:
+        geom_fail_counter: Counter of (element_type, dm_code) → ジオメトリ変換失敗件数
+        errors: 個別エラーメッセージのリスト
 
     Returns:
         ログファイルのパス
     """
+    if geom_fail_counter is None:
+        geom_fail_counter = Counter()
+    if errors is None:
+        errors = []
+
     input_name = os.path.splitext(os.path.basename(input_file))[0]
     log_path = os.path.join(os.path.dirname(output_path), f"{input_name}_log.txt")
 
     code_counter = stats["code_counter"]
     type_counter = stats["type_counter"]
-    no_coords_count = stats["no_coords_count"]
+    no_coords_counter = stats["no_coords_counter"]
 
     total = sum(type_counter.values())
     converted = sum(
         count for et, count in type_counter.items() if et in supported_types
     )
+    no_coords_total = sum(no_coords_counter.values())
+    geom_fail_total = sum(geom_fail_counter.values())
 
     lines = [
         "=== DM変換ログ ===",
@@ -60,7 +81,8 @@ def write_log(input_file, output_path, parsed, layers, stats, supported_types):
         [
             "",
             f"合計: {total}件 (変換: {converted}件, 未対応: {total - converted}件)",
-            f"座標なしスキップ: {no_coords_count}件",
+            f"座標なしスキップ: {no_coords_total}件",
+            f"ジオメトリ変換失敗: {geom_fail_total}件",
             f"出力レイヤ数: {len(layers)}",
         ]
     )
@@ -93,6 +115,28 @@ def write_log(input_file, output_path, parsed, layers, stats, supported_types):
         lines.extend(["", "--- 未変換の分類コード ---"])
         lines.extend(undefined_codes)
         lines.extend(unsupported_codes)
+
+    # 座標なしスキップ詳細
+    if no_coords_counter:
+        lines.extend(["", "--- 座標なしスキップ詳細 ---"])
+        for (et, dm_code), count in sorted(no_coords_counter.items()):
+            name = get_classification_name(dm_code)
+            label = f"{name}" if name != dm_code else dm_code
+            lines.append(f"  {et} {dm_code}({label}): {count}件")
+
+    # ジオメトリ変換失敗詳細
+    if geom_fail_counter:
+        lines.extend(["", "--- ジオメトリ変換失敗 ---"])
+        for (et, dm_code), count in sorted(geom_fail_counter.items()):
+            name = get_classification_name(dm_code)
+            label = f"{name}" if name != dm_code else dm_code
+            lines.append(f"  {et} {dm_code}({label}): {count}件")
+
+    # エラー詳細
+    if errors:
+        lines.extend(["", "--- エラー ---"])
+        for err in errors:
+            lines.append(f"  {err}")
 
     with open(log_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
