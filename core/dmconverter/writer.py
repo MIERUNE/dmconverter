@@ -1,6 +1,6 @@
 """レイヤ分け＋GeoPackage書き出し
 
-分類コード×ジオメトリタイプでレイヤを分割し、GeoPackageに書き出す。
+分類コード上位2桁でレイヤを分割し、GeoPackageに書き出す。
 レイヤ名は取得分類コード表の名称を使用する。
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from collections import defaultdict
 
-from PyQt5.QtCore import QVariant
+from qgis.PyQt.QtCore import QVariant
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsFeature,
