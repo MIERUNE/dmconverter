@@ -12,6 +12,7 @@ from qgis.core import (
     QgsCoordinateTransform,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
+    QgsProject, 
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
@@ -185,35 +186,40 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             return {self.OUTPUT: output_path}
         feedback.pushInfo(f"GeoPackage出力完了: {output_path}")
 
-        # レイヤーをプロジェクトに追加
-        combined_extent = QgsRectangle()
-        for layer in layers:
-            gpkg_layer = QgsVectorLayer(
-                f"{output_path}|layername={layer.name()}",
-                layer.name(),
-                "ogr",
-            )
-            context.addLayerToLoadOnCompletion(
-                gpkg_layer.id(),
-                QgsProcessingContext.LayerDetails(
-                    layer.name(),
-                    context.project(),
-                    layer.name(),
-                ),
-            )
-            context.temporaryLayerStore().addMapLayer(gpkg_layer)
+        # # レイヤーをプロジェクトに追加
+        # combined_extent = QgsRectangle()
+        # for layer in layers:
+        #     gpkg_layer = QgsVectorLayer(
+        #         f"{output_path}|layername={layer.name()}",
+        #         layer.name(),
+        #         "ogr",
+        #     )
+        #     context.addLayerToLoadOnCompletion(
+        #         gpkg_layer.id(),
+        #         QgsProcessingContext.LayerDetails(
+        #             layer.name(),
+        #             context.project(),
+        #             layer.name(),
+        #         ),
+        #     )
+        #     context.temporaryLayerStore().addMapLayer(gpkg_layer)
 
-            layer_extent = gpkg_layer.extent()
-            if not layer_extent.isEmpty():
-                if combined_extent.isEmpty():
-                    combined_extent = QgsRectangle(layer_extent)
-                else:
-                    combined_extent.combineExtentWith(layer_extent)
+        #     layer_extent = gpkg_layer.extent()
+        #     if not layer_extent.isEmpty():
+        #         if combined_extent.isEmpty():
+        #             combined_extent = QgsRectangle(layer_extent)
+        #         else:
+        #             combined_extent.combineExtentWith(layer_extent)
 
-        self._combined_extent = combined_extent
-        self._layer_crs = gpkg_layer.crs()
+        # self._combined_extent = combined_extent
+        # self._layer_crs = gpkg_layer.crs()
 
-        feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
+        # feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
+
+        self._output_path = output_path
+        self._layer_names = [layer.name() for layer in layers]
+
+        feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加予定")
 
         # 変換統計の収集（全ファイル分を集約）
         stats = self._collect_stats(parsed_list)
@@ -234,24 +240,72 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
         return {self.OUTPUT: output_path}
 
+    # def postProcessAlgorithm(self, context, feedback):
+    #     """レイヤ読み込み後にマップキャンバスを全体表示にズームする。"""
+    #     from qgis.utils import iface
+
+    #     if iface is None or not hasattr(self, "_combined_extent"):
+    #         return {}
+    #     if self._combined_extent.isEmpty():
+    #         return {}
+
+    #     canvas = iface.mapCanvas()
+    #     dest_crs = canvas.mapSettings().destinationCrs()
+    #     if dest_crs != self._layer_crs:
+    #         transform = QgsCoordinateTransform(
+    #             self._layer_crs, dest_crs, context.project()
+    #         )
+    #         extent = transform.transformBoundingBox(self._combined_extent)
+    #     else:
+    #         extent = QgsRectangle(self._combined_extent)
+
+    #     extent.scale(1.05)
+    #     canvas.setExtent(extent)
+    #     canvas.refresh()
+    #     return {}
+
     def postProcessAlgorithm(self, context, feedback):
-        """レイヤ読み込み後にマップキャンバスを全体表示にズームする。"""
+        """レイヤをプロジェクトに追加し、マップキャンバスを全体表示にズームする。"""
         from qgis.utils import iface
 
-        if iface is None or not hasattr(self, "_combined_extent"):
+        if not hasattr(self, "_output_path") or not hasattr(self, "_layer_names"):
             return {}
-        if self._combined_extent.isEmpty():
+
+        project = QgsProject.instance()
+        combined_extent = QgsRectangle()
+        layer_crs = None
+
+        for name in self._layer_names:
+            uri = f"{self._output_path}|layername={name}"
+            gpkg_layer = QgsVectorLayer(uri, name, "ogr")
+
+            if not gpkg_layer.isValid():
+                feedback.pushWarning(f"レイヤ無効: {name}")
+                continue
+
+            project.addMapLayer(gpkg_layer)
+            layer_crs = gpkg_layer.crs()
+
+            layer_extent = gpkg_layer.extent()
+            if not layer_extent.isEmpty():
+                if combined_extent.isEmpty():
+                    combined_extent = QgsRectangle(layer_extent)
+                else:
+                    combined_extent.combineExtentWith(layer_extent)
+
+        # ズーム処理
+        if iface is None or combined_extent.isEmpty() or layer_crs is None:
             return {}
 
         canvas = iface.mapCanvas()
         dest_crs = canvas.mapSettings().destinationCrs()
-        if dest_crs != self._layer_crs:
+        if dest_crs != layer_crs:
             transform = QgsCoordinateTransform(
-                self._layer_crs, dest_crs, context.project()
+                layer_crs, dest_crs, context.project()
             )
-            extent = transform.transformBoundingBox(self._combined_extent)
+            extent = transform.transformBoundingBox(combined_extent)
         else:
-            extent = QgsRectangle(self._combined_extent)
+            extent = QgsRectangle(combined_extent)
 
         extent.scale(1.05)
         canvas.setExtent(extent)
