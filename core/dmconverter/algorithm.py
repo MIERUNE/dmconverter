@@ -6,9 +6,16 @@
 
 from qgis.core import (
     QgsProcessingAlgorithm,
+    QgsProcessingContext,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
+    QgsVectorLayer,
 )
+
+from .classifier import classify
+from .parser.parser import parse
+from .reader import read_records
+from .writer import create_layers, save_to_geopackage
 
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
@@ -86,12 +93,46 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):
-        """「実行」ボタンを押したときに走る処理の本体
-
-        TODO: core/ の実装後にここから変換処理を呼び出す
-        """
+        """「実行」ボタンを押したときに走る処理の本体"""
+        input_file = self.parameterAsFile(parameters, self.INPUT_FILES, context)
         output_path = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
 
-        feedback.pushInfo("DM変換処理は未実装です")
+        if not input_file:
+            feedback.reportError("DMファイルを指定してください")
+            return {self.OUTPUT: output_path}
+
+        feedback.pushInfo(f"読み込み中: {input_file}")
+        classified = classify(read_records(input_file))
+        parsed = parse(classified)
+
+        feedback.pushInfo(
+            f"解析完了: {len(parsed.groups)}グループ, "
+            f"座標系{parsed.mesh_info.coordinate_system}"
+        )
+
+        layers = create_layers(parsed)
+        feedback.pushInfo(f"レイヤ作成完了: {len(layers)}レイヤ")
+
+        save_to_geopackage(layers, output_path)
+        feedback.pushInfo(f"GeoPackage出力完了: {output_path}")
+
+        # レイヤーをプロジェクトに追加
+        for layer in layers:
+            gpkg_layer = QgsVectorLayer(
+                f"{output_path}|layername={layer.name()}",
+                layer.name(),
+                "ogr",
+            )
+            context.addLayerToLoadOnCompletion(
+                gpkg_layer.id(),
+                QgsProcessingContext.LayerDetails(
+                    layer.name(),
+                    context.project(),
+                    layer.name(),
+                ),
+            )
+            context.temporaryLayerStore().addMapLayer(gpkg_layer)
+
+        feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
 
         return {self.OUTPUT: output_path}

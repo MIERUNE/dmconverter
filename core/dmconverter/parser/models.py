@@ -73,7 +73,7 @@ class ParsedGroup:
 
 @dataclass(frozen=True)
 class MeshInfo:
-    """図郭情報"""
+    """図郭情報（図郭レコード(a)から取得）"""
 
     coordinate_system: int  # 座標系番号（1-19）
     map_name: str  # 図名
