@@ -45,8 +45,13 @@ def _format_date(raw: str) -> str | None:
     stripped = raw.strip()
     if not stripped or stripped == "0000" or not stripped.isdigit():
         return None
+    if len(stripped) != 4:
+        return None
     yy = stripped[:2]
     mm = stripped[2:4]
+    month = int(mm)
+    if month < 1 or month > 12:
+        return None
     year = f"20{yy}" if int(yy) < 50 else f"19{yy}"
     return f"{year}/{mm}"
 
