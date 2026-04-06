@@ -29,6 +29,7 @@ from .parser.models import MapSheetInfo, ParsedDM, ParsedElement
 _ELEMENT_TYPE_MAP = {
     "E2": ("線", QgsWkbTypes.LineString, to_line_geometry),
     "E5": ("点", QgsWkbTypes.Point, to_point_geometry),
+    "E7": ("注記", QgsWkbTypes.Point, to_point_geometry),
 }
 
 
@@ -54,6 +55,16 @@ _FIELD_DEFS: list[tuple[str, str, QVariant.Type]] = [
     ("deleted_date", "消去年月", QVariant.String),
 ]
 
+# 注記固有フィールド（E7のみ）
+_ANNOTATION_FIELD_DEFS: list[tuple[str, str, QVariant.Type]] = [
+    ("text", "注記内容", QVariant.String),
+    ("orientation", "縦横区分", QVariant.Int),
+    ("size", "字の大きさ", QVariant.Int),
+    ("spacing", "字隔", QVariant.Int),
+    ("angle", "文字列の方向", QVariant.Int),
+    ("line_weight", "線号", QVariant.Int),
+]
+
 
 def _build_fields() -> QgsFields:
     """レイヤの属性フィールドを定義する。"""
@@ -62,6 +73,14 @@ def _build_fields() -> QgsFields:
         fields.append(QgsField(field_name, field_type))
         if field_name == "分類コード":
             fields.append(QgsField("分類名", QVariant.String))
+    return fields
+
+
+def _build_annotation_fields() -> QgsFields:
+    """注記レイヤの属性フィールドを定義する（共通 + 注記固有）。"""
+    fields = _build_fields()
+    for _, field_name, field_type in _ANNOTATION_FIELD_DEFS:
+        fields.append(QgsField(field_name, field_type))
     return fields
 
 
@@ -108,7 +127,6 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
                 groups[(layer_code, geom_type_name)].append((elem, dm.map_sheet))
 
     layers: list[QgsVectorLayer] = []
-    fields = _build_fields()
 
     for (layer_code, geom_type_name), elem_pairs in groups.items():
         first_elem = elem_pairs[0][0]
@@ -116,7 +134,11 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
         wkb_type = type_info[1]
         geom_func = type_info[2]
 
-        # レイヤ名: "道路_線" or "建物_点"
+        # E7の場合は注記用フィールドを使用
+        is_annotation = first_elem.element_type == "E7"
+        fields = _build_annotation_fields() if is_annotation else _build_fields()
+
+        # レイヤ名: "道路_線", "建物_点", "基準点_注記" など
         group_name = _get_group_name(layer_code)
         layer_name = f"{group_name}_{geom_type_name}"
 
@@ -140,6 +162,12 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
                 feat.setAttribute(field_name, getattr(elem, attr_name))
             name = get_classification_name(elem.dm_code)
             feat.setAttribute("分類名", None if name == elem.dm_code else name)
+
+            # 注記固有フィールドの設定（E7のみ）
+            if is_annotation and elem.annotation is not None:
+                for attr_name, field_name, _ in _ANNOTATION_FIELD_DEFS:
+                    feat.setAttribute(field_name, getattr(elem.annotation, attr_name))
+
             features.append(feat)
 
         provider.addFeatures(features)

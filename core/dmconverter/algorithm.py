@@ -21,7 +21,7 @@ from .reader import read_records
 from .writer import create_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
-_SUPPORTED_TYPES = {"E2", "E5"}
+_SUPPORTED_TYPES = {"E2", "E5", "E7"}
 
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
