@@ -27,7 +27,6 @@ _TYPE_NAMES = {
 
 def write_log(
     dm_files,
-    output_path,
     parsed,
     layers,
     stats,
@@ -56,8 +55,12 @@ def write_log(
         skipped_files = []
 
     first_file = dm_files[0]
-    input_name = os.path.splitext(os.path.basename(first_file))[0]
-    log_path = os.path.join(os.path.dirname(output_path), f"{input_name}_log.txt")
+    input_dir = os.path.dirname(first_file)
+    if len(dm_files) > 1:
+        log_name = os.path.basename(input_dir)
+    else:
+        log_name = os.path.splitext(os.path.basename(first_file))[0]
+    log_path = os.path.join(input_dir, f"{log_name}_log.txt")
 
     code_counter = stats["code_counter"]
     type_counter = stats["type_counter"]

@@ -212,7 +212,6 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         if output_log:
             log_path = write_log(
                 dm_files,
-                output_path,
                 parsed_list[0],
                 layers,
                 stats,
