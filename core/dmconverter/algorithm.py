@@ -11,11 +11,10 @@ from collections import Counter
 from qgis.core import (
     QgsCoordinateTransform,
     QgsProcessingAlgorithm,
-    QgsProcessingContext,
-    QgsProject, 
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
+    QgsProject,
     QgsRectangle,
     QgsVectorLayer,
 )
@@ -186,40 +185,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             return {self.OUTPUT: output_path}
         feedback.pushInfo(f"GeoPackage出力完了: {output_path}")
 
-        # # レイヤーをプロジェクトに追加
-        # combined_extent = QgsRectangle()
-        # for layer in layers:
-        #     gpkg_layer = QgsVectorLayer(
-        #         f"{output_path}|layername={layer.name()}",
-        #         layer.name(),
-        #         "ogr",
-        #     )
-        #     context.addLayerToLoadOnCompletion(
-        #         gpkg_layer.id(),
-        #         QgsProcessingContext.LayerDetails(
-        #             layer.name(),
-        #             context.project(),
-        #             layer.name(),
-        #         ),
-        #     )
-        #     context.temporaryLayerStore().addMapLayer(gpkg_layer)
-
-        #     layer_extent = gpkg_layer.extent()
-        #     if not layer_extent.isEmpty():
-        #         if combined_extent.isEmpty():
-        #             combined_extent = QgsRectangle(layer_extent)
-        #         else:
-        #             combined_extent.combineExtentWith(layer_extent)
-
-        # self._combined_extent = combined_extent
-        # self._layer_crs = gpkg_layer.crs()
-
-        # feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
-
+        # パスとレイヤ名を保存
         self._output_path = output_path
         self._layer_names = [layer.name() for layer in layers]
 
-        feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加予定")
+        feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
 
         # 変換統計の収集（全ファイル分を集約）
         stats = self._collect_stats(parsed_list)
@@ -231,38 +201,19 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         output_log = self.parameterAsBool(parameters, self.OUTPUT_LOG, context)
         if output_log:
             log_path = write_log(
-                dm_files, output_path, parsed_list[0],
-                layers, stats, _SUPPORTED_TYPES,
-                merge_result.geom_fail_counter, merge_result.errors,
+                dm_files,
+                output_path,
+                parsed_list[0],
+                layers,
+                stats,
+                _SUPPORTED_TYPES,
+                merge_result.geom_fail_counter,
+                merge_result.errors,
                 skipped_files,
             )
             feedback.pushInfo(f"変換ログ出力: {log_path}")
 
         return {self.OUTPUT: output_path}
-
-    # def postProcessAlgorithm(self, context, feedback):
-    #     """レイヤ読み込み後にマップキャンバスを全体表示にズームする。"""
-    #     from qgis.utils import iface
-
-    #     if iface is None or not hasattr(self, "_combined_extent"):
-    #         return {}
-    #     if self._combined_extent.isEmpty():
-    #         return {}
-
-    #     canvas = iface.mapCanvas()
-    #     dest_crs = canvas.mapSettings().destinationCrs()
-    #     if dest_crs != self._layer_crs:
-    #         transform = QgsCoordinateTransform(
-    #             self._layer_crs, dest_crs, context.project()
-    #         )
-    #         extent = transform.transformBoundingBox(self._combined_extent)
-    #     else:
-    #         extent = QgsRectangle(self._combined_extent)
-
-    #     extent.scale(1.05)
-    #     canvas.setExtent(extent)
-    #     canvas.refresh()
-    #     return {}
 
     def postProcessAlgorithm(self, context, feedback):
         """レイヤをプロジェクトに追加し、マップキャンバスを全体表示にズームする。"""
@@ -300,9 +251,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         canvas = iface.mapCanvas()
         dest_crs = canvas.mapSettings().destinationCrs()
         if dest_crs != layer_crs:
-            transform = QgsCoordinateTransform(
-                layer_crs, dest_crs, context.project()
-            )
+            transform = QgsCoordinateTransform(layer_crs, dest_crs, context.project())
             extent = transform.transformBoundingBox(combined_extent)
         else:
             extent = QgsRectangle(combined_extent)
@@ -372,4 +321,3 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError(
                 f"コード表に未定義の分類コード: {', '.join(undefined)}"
             )
-
