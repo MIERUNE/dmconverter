@@ -20,6 +20,8 @@ _TYPE_NAMES = {
     "E6": "方向",
     "E7": "注記",
     "E8": "属性",
+    "G": "グリッド",
+    "T": "不整三角網",
 }
 
 
@@ -78,7 +80,7 @@ def write_log(
         for f in dm_files:
             lines.append(f"  {os.path.basename(f)}")
         if skipped_files:
-            lines.append(f"スキップ ({len(skipped_files)}ファイル, 座標系不一致):")
+            lines.append(f"スキップ ({len(skipped_files)}ファイル):")
             for sf in skipped_files:
                 lines.append(f"  {sf}")
 
@@ -120,9 +122,7 @@ def write_log(
                 f"  {et} {dm_code}({name}): {count}件（要素タイプ{et}({type_name})は未対応）"
             )
         elif name == dm_code:
-            undefined_codes.append(
-                f"  {et} {dm_code}: {count}件（コード表に未定義）"
-            )
+            undefined_codes.append(f"  {et} {dm_code}: {count}件（コード表に未定義）")
         else:
             converted_codes.append(f"  {et} {dm_code}({name}): {count}件")
 

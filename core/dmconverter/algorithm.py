@@ -136,6 +136,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         # 各ファイルを解析（座標系が異なるファイルはスキップ）
         parsed_list = []
         base_coord_system = None
+        base_scale = None
         skipped_files = []
 
         for dm_file in dm_files:
@@ -145,10 +146,25 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
             if base_coord_system is None:
                 base_coord_system = parsed.mesh_info.coordinate_system
+                base_scale = parsed.mesh_info.scale
             elif parsed.mesh_info.coordinate_system != base_coord_system:
                 skipped_files.append(
                     f"{os.path.basename(dm_file)}"
                     f"(座標系{parsed.mesh_info.coordinate_system})"
+                )
+                feedback.reportError(
+                    f"座標系が異なるためスキップ（基準: 座標系{base_coord_system}）: "
+                    f"{os.path.basename(dm_file)}"
+                )
+                continue
+            elif parsed.mesh_info.scale != base_scale:
+                skipped_files.append(
+                    f"{os.path.basename(dm_file)}"
+                    f"(地図情報レベル{parsed.mesh_info.scale})"
+                )
+                feedback.reportError(
+                    f"地図情報レベルが異なるためスキップ（基準: {base_scale}）: "
+                    f"{os.path.basename(dm_file)}"
                 )
                 continue
 
@@ -158,12 +174,6 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 f"座標系{parsed.mesh_info.coordinate_system}"
             )
             parsed_list.append(parsed)
-
-        if skipped_files:
-            feedback.reportError(
-                f"座標系が異なるためスキップ（基準: 座標系{base_coord_system}）: "
-                f"{', '.join(skipped_files)}"
-            )
 
         if not parsed_list:
             feedback.reportError("変換可能なDMファイルがありません")
