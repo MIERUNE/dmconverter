@@ -182,6 +182,9 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         # レイヤ作成（複数ファイルの同名レイヤはマージ）
         merge_result = create_merged_layers(parsed_list)
         layers = merge_result.layers
+        if not layers:
+            feedback.reportError("変換対象の要素がありません")
+            return {self.OUTPUT: output_path}
         feedback.pushInfo(f"レイヤ作成完了: {len(layers)}レイヤ")
 
         if merge_result.errors:
@@ -199,7 +202,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self._output_path = output_path
         self._layer_names = [layer.name() for layer in layers]
 
-        feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加")
+        feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加します")
 
         # 変換統計の収集（全ファイル分を集約）
         stats = self._collect_stats(parsed_list)
