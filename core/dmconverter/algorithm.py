@@ -1,5 +1,4 @@
 """QgsProcessingAlgorithm: DM→GeoPackage変換アルゴリズム
-
 入力: DMファイル選択 or フォルダ指定
 出力: GeoPackageファイル
 """
