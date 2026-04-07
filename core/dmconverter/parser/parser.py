@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
-from ..classifier import ClassifiedRecords, ElementGroup, ElementRecord
 from ..constants import COORD_FIELD_WIDTH
+from .classifier import ClassifiedRecords, ElementGroup, ElementRecord
 from .models import (
     AnnotationInfo,
     AttributeInfo,
