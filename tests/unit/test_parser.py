@@ -390,5 +390,6 @@ class TestParseMapSheet(unittest.TestCase):
         self.assertLess(info.origin_y, info.upper_y)
         self.assertIn(info.coord_unit, (1, 10, 999))
 
+
 if __name__ == "__main__":
     unittest.main()
