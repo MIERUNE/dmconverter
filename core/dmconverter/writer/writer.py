@@ -7,7 +7,8 @@
 from __future__ import annotations
 
 import os
-from collections import defaultdict
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 
 from qgis.PyQt.QtCore import QVariant
 from qgis.core import (
@@ -20,10 +21,10 @@ from qgis.core import (
     QgsWkbTypes,
 )
 
-from .constants import CLASSIFICATIONS, get_classification_name
+from ..constants import CLASSIFICATIONS, get_classification_name
+from ..parser.models import MapSheetInfo, ParsedDM, ParsedElement
 from .crs import get_epsg
 from .geometry import to_line_geometry, to_point_geometry
-from .parser.models import MapSheetInfo, ParsedDM, ParsedElement
 
 # 要素タイプ → (ジオメトリタイプ名, WKBタイプ, ジオメトリ変換関数)
 _ELEMENT_TYPE_MAP = {
@@ -78,7 +79,16 @@ def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
     return create_merged_layers([dm])
 
 
-def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
+@dataclass
+class MergeResult:
+    """create_merged_layers の戻り値"""
+
+    layers: list[QgsVectorLayer] = field(default_factory=list)
+    geom_fail_counter: Counter = field(default_factory=Counter)
+    errors: list[str] = field(default_factory=list)
+
+
+def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     """複数ParsedDMからレイヤをマージして作成する。
 
     同じ分類コード上位2桁×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
@@ -86,7 +96,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
     各要素のジオメトリ変換にはそれぞれのファイルのmap_sheetを使用する。
     """
     if not dm_list:
-        return []
+        return MergeResult()
 
     first_dm = dm_list[0]
     epsg = get_epsg(first_dm.mesh_info.coordinate_system)
@@ -108,6 +118,8 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
                 groups[(layer_code, geom_type_name)].append((elem, dm.map_sheet))
 
     layers: list[QgsVectorLayer] = []
+    geom_fail_counter: Counter = Counter()
+    errors: list[str] = []
     fields = _build_fields()
 
     for (layer_code, geom_type_name), elem_pairs in groups.items():
@@ -134,8 +146,20 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
         for elem, map_sheet in elem_pairs:
             if not elem.coordinates:
                 continue
+            try:
+                geom = geom_func(elem, map_sheet)
+            except Exception as e:
+                geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
+                errors.append(
+                    f"{elem.element_type} {elem.dm_code} "
+                    f"要素ID={elem.element_id}: {e}"
+                )
+                continue
+            if geom is None or geom.isEmpty():
+                geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
+                continue
             feat = QgsFeature(layer.fields())
-            feat.setGeometry(geom_func(elem, map_sheet))
+            feat.setGeometry(geom)
             for attr_name, field_name, _ in _FIELD_DEFS:
                 feat.setAttribute(field_name, getattr(elem, attr_name))
             name = get_classification_name(elem.dm_code)
@@ -146,7 +170,11 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
         layer.updateExtents()
         layers.append(layer)
 
-    return layers
+    return MergeResult(
+        layers=layers,
+        geom_fail_counter=geom_fail_counter,
+        errors=errors,
+    )
 
 
 def save_to_geopackage(layers: list[QgsVectorLayer], output_path: str) -> list[str]:
