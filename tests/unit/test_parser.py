@@ -393,9 +393,7 @@ class TestParseMapSheet(unittest.TestCase):
     def test_parsed_dm_has_map_sheet(self):
         """ParsedDMにmap_sheetが含まれる"""
         dm_path = SAMPLE_DM_FILES[0]
-        result = parse(
-            classify(read_records(dm_path), detect_encoding(dm_path))
-        )
+        result = parse(classify(read_records(dm_path), detect_encoding(dm_path)))
         self.assertIsNotNone(result.map_sheet)
         self.assertGreater(result.map_sheet.origin_x, 0)
 
