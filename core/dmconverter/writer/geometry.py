@@ -51,6 +51,6 @@ def to_line_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGeom
 
 
 def to_point_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGeometry:
-    """E5要素からPoint geometryを生成する。"""
+    """E5・E7要素（点・注記）からPoint geometryを生成する。"""
     point = _to_abs_point(element.coordinates[0], map_sheet)
     return QgsGeometry.fromPointXY(point)
