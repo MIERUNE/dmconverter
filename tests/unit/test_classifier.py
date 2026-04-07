@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from core.dmconverter.classifier import (
+from core.dmconverter.parser.classifier import (
     ClassifiedRecords,
     _calc_mesh_row_count,
     _get_revision_count,
@@ -11,7 +11,7 @@ from core.dmconverter.classifier import (
     _is_skip_prefix,
     classify,
 )
-from core.dmconverter.reader import read_records
+from core.dmconverter.parser.reader import read_records
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 SAMPLE_DM_FILES = [

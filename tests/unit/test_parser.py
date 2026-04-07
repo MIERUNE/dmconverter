@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from core.dmconverter.classifier import classify
+from core.dmconverter.parser.classifier import classify
 from core.dmconverter.parser.models import (
     Coordinate,
     ParsedDM,
@@ -19,7 +19,7 @@ from core.dmconverter.parser.parser import (
     _safe_int,
     parse,
 )
-from core.dmconverter.reader import detect_encoding, read_records
+from core.dmconverter.parser.reader import detect_encoding, read_records
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 SAMPLE_DM_FILES = [
