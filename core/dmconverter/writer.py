@@ -140,7 +140,11 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> list[QgsVectorLayer]:
 
         # レイヤ名: "道路_線", "建物_点", "基準点_注記" など
         group_name = _get_group_name(layer_code)
-        layer_name = f"{group_name}_{geom_type_name}"
+
+        if group_name == geom_type_name:
+            layer_name = group_name
+        else:
+            layer_name = f"{group_name}_{geom_type_name}"
 
         # メモリレイヤ作成
         uri = f"{QgsWkbTypes.displayString(wkb_type)}?crs=EPSG:{epsg}"
