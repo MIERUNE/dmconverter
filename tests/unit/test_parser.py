@@ -328,6 +328,26 @@ class TestParseWithSampleData(unittest.TestCase):
                             )
                 self.assertTrue(e1_found, "E1要素が見つからない")
 
+    def test_e1_elements_form_closed_ring(self):
+        """E1要素の座標列が閉じたリングである（先頭点==末尾点）"""
+        for dm_path in SAMPLE_DM_FILES:
+            with self.subTest(dm_path=dm_path):
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
+                for group in result.groups:
+                    for elem in group.elements:
+                        if elem.element_type == "E1":
+                            first = elem.coordinates[0]
+                            last = elem.coordinates[-1]
+                            self.assertEqual(
+                                (first.x, first.y),
+                                (last.x, last.y),
+                                f"E1要素のリングが閉じていない "
+                                f"(dm_code={elem.dm_code}, "
+                                f"id={elem.element_id})",
+                            )
+
     def test_e2_elements_have_coordinates(self):
         """E2要素が座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
