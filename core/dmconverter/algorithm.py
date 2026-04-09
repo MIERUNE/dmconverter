@@ -10,6 +10,7 @@ from collections import Counter
 
 from qgis.core import (
     QgsCoordinateTransform,
+    QgsLayerTreeGroup,
     QgsProcessingAlgorithm,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFile,
@@ -19,7 +20,7 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
-from .constants import get_classification_name
+from .constants import CLASSIFICATIONS, get_classification_name
 from .parser.classifier import classify
 from .parser.parser import parse
 from .parser.reader import read_records
@@ -201,6 +202,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         # パスとレイヤ名を保存
         self._output_path = output_path
         self._layer_names = [layer.name() for layer in layers]
+        self._layer_parent_codes = merge_result.layer_parent_codes
 
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加します")
 
@@ -238,6 +240,10 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         combined_extent = QgsRectangle()
         layer_crs = None
 
+        root = project.layerTreeRoot()
+        dm_group = root.insertGroup(0, "DM")
+        sub_groups: dict[str, QgsLayerTreeGroup] = {}
+
         for name in self._layer_names:
             uri = f"{self._output_path}|layername={name}"
             gpkg_layer = QgsVectorLayer(uri, name, "ogr")
@@ -246,7 +252,13 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushWarning(f"レイヤ無効: {name}")
                 continue
 
-            project.addMapLayer(gpkg_layer)
+            parent_code = self._layer_parent_codes.get(name, "")
+            group_name = CLASSIFICATIONS.get(parent_code, {}).get("name", parent_code)
+            if group_name not in sub_groups:
+                sub_groups[group_name] = dm_group.addGroup(group_name)
+
+            project.addMapLayer(gpkg_layer, False)
+            sub_groups[group_name].addLayer(gpkg_layer)
             layer_crs = gpkg_layer.crs()
 
             layer_extent = gpkg_layer.extent()

@@ -87,15 +87,22 @@ def _build_annotation_fields() -> QgsFields:
 
 
 def _get_group_name(layer_code: str) -> str:
-    """上位2桁コードからグループ名を返す。"""
-    group = CLASSIFICATIONS.get(layer_code)
-    if group is not None:
+    """4桁分類コードからレイヤ名を返す。"""
+    parent_code = layer_code[:2]
+    data_code = layer_code[2:]
+    group = CLASSIFICATIONS.get(parent_code)
+    if group is None:
+        return layer_code
+    if data_code == "00":
         return group["name"]
-    return layer_code
+    data_name = group.get(data_code)
+    if data_name is None:
+        return layer_code
+    return data_name
 
 
 def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
-    """ParsedDM から上位2桁グループのメモリレイヤを作成する。"""
+    """ParsedDM から4桁コード単位のメモリレイヤを作成する。"""
     return create_merged_layers([dm]).layers
 
 
@@ -106,12 +113,13 @@ class MergeResult:
     layers: list[QgsVectorLayer] = field(default_factory=list)
     geom_fail_counter: Counter = field(default_factory=Counter)
     errors: list[str] = field(default_factory=list)
+    layer_parent_codes: dict[str, str] = field(default_factory=dict)
 
 
 def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     """複数ParsedDMからレイヤをマージして作成する。
 
-    同じ分類コード上位2桁×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
+    同じ分類コード4桁×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
     CRSは最初のParsedDMの座標系を使用する。
     各要素のジオメトリ変換にはそれぞれのファイルのmap_sheetを使用する。
     """
@@ -134,12 +142,13 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
                 if type_info is None:
                     continue
                 geom_type_name = type_info[0]
-                layer_code = elem.dm_code[:2]
+                layer_code = elem.dm_code
                 groups[(layer_code, geom_type_name)].append((elem, dm.map_sheet))
 
     layers: list[QgsVectorLayer] = []
     geom_fail_counter: Counter = Counter()
     errors: list[str] = []
+    layer_parent_codes: dict[str, str] = {}
 
     for (layer_code, geom_type_name), elem_pairs in groups.items():
         first_elem = elem_pairs[0][0]
@@ -202,11 +211,13 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         provider.addFeatures(features)
         layer.updateExtents()
         layers.append(layer)
+        layer_parent_codes[layer_name] = layer_code[:2]
 
     return MergeResult(
         layers=layers,
         geom_fail_counter=geom_fail_counter,
         errors=errors,
+        layer_parent_codes=layer_parent_codes,
     )
 
 
