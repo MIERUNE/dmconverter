@@ -86,7 +86,7 @@ def _build_annotation_fields() -> QgsFields:
     return fields
 
 
-def _get_group_name(layer_code: str) -> str:
+def _get_layer_name(layer_code: str) -> str:
     """4桁分類コードからレイヤ名を返す。"""
     parent_code = layer_code[:2]
     data_code = layer_code[2:]
@@ -153,7 +153,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     # 衝突するレイヤ名を事前検出
     _name_counts: Counter = Counter()
     for layer_code, geom_type_name in groups:
-        g = _get_group_name(layer_code)
+        g = _get_layer_name(layer_code)
         _name_counts[g if g == geom_type_name else f"{g}_{geom_type_name}"] += 1
     _conflicting_names: set[str] = {n for n, c in _name_counts.items() if c > 1}
 
@@ -168,12 +168,12 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         fields = _build_annotation_fields() if is_annotation else _build_fields()
 
         # レイヤ名: "道路_線", "建物_点", "基準点_注記" など
-        group_name = _get_group_name(layer_code)
+        data_name = _get_layer_name(layer_code)
 
-        if group_name == geom_type_name:
-            layer_name = group_name
+        if data_name == geom_type_name:
+            layer_name = data_name
         else:
-            layer_name = f"{group_name}_{geom_type_name}"
+            layer_name = f"{data_name}_{geom_type_name}"
 
         # 衝突する場合は親グループ名をプレフィックスに付けて一意化
         # 例: "方位_線" → "応用測量整飾_方位_線" / "測量記録等_方位_線"
