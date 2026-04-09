@@ -180,7 +180,9 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         # 同一親グループ内で衝突する場合はさらに4桁コードをサフィックスに付ける
         # 例: "測量記録等_測点名称_注記" → "測量記録等_測点名称_注記_8221"
         if layer_name in _conflicting_names:
-            parent_name = CLASSIFICATIONS.get(layer_code[:2], {}).get("name", layer_code[:2])
+            parent_name = CLASSIFICATIONS.get(layer_code[:2], {}).get(
+                "name", layer_code[:2]
+            )
             layer_name = f"{parent_name}_{layer_name}"
         if layer_name in layer_parent_codes:
             layer_name = f"{layer_name}_{layer_code}"
