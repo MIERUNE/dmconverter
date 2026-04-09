@@ -150,6 +150,13 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     errors: list[str] = []
     layer_parent_codes: dict[str, str] = {}
 
+    # 衝突するレイヤ名を事前検出
+    _name_counts: Counter = Counter()
+    for layer_code, geom_type_name in groups:
+        g = _get_group_name(layer_code)
+        _name_counts[g if g == geom_type_name else f"{g}_{geom_type_name}"] += 1
+    _conflicting_names: set[str] = {n for n, c in _name_counts.items() if c > 1}
+
     for (layer_code, geom_type_name), elem_pairs in groups.items():
         first_elem = elem_pairs[0][0]
         type_info = _ELEMENT_TYPE_MAP[first_elem.element_type]
@@ -167,6 +174,16 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
             layer_name = group_name
         else:
             layer_name = f"{group_name}_{geom_type_name}"
+
+        # 衝突する場合は親グループ名をプレフィックスに付けて一意化
+        # 例: "方位_線" → "応用測量整飾_方位_線" / "測量記録等_方位_線"
+        # 同一親グループ内で衝突する場合はさらに4桁コードをサフィックスに付ける
+        # 例: "測量記録等_測点名称_注記" → "測量記録等_測点名称_注記_8221"
+        if layer_name in _conflicting_names:
+            parent_name = CLASSIFICATIONS.get(layer_code[:2], {}).get("name", layer_code[:2])
+            layer_name = f"{parent_name}_{layer_name}"
+        if layer_name in layer_parent_codes:
+            layer_name = f"{layer_name}_{layer_code}"
 
         # メモリレイヤ作成
         uri = f"{QgsWkbTypes.displayString(wkb_type)}?crs=EPSG:{epsg}"
