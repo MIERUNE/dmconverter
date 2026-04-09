@@ -255,7 +255,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             parent_code = self._layer_parent_codes.get(name, "")
             group_name = CLASSIFICATIONS.get(parent_code, {}).get("name", parent_code)
             if group_name not in sub_groups:
-                sub_groups[group_name] = dm_group.addGroup(group_name)
+                sub_groups[group_name] = dm_group.findGroup(group_name) or dm_group.addGroup(group_name)
 
             project.addMapLayer(gpkg_layer, False)
             sub_groups[group_name].addLayer(gpkg_layer)
