@@ -13,6 +13,7 @@ from core.dmconverter.parser.parser import (
     _parse_attribute_element,
     _parse_coordinate_line_2d,
     _parse_coordinate_line_3d,
+    _parse_map_sheet,
     _parse_mesh_info,
     _parse_point_element,
     _safe_int,
@@ -308,6 +309,45 @@ class TestParseWithSampleData(unittest.TestCase):
                             f"要素dm_codeが4桁でない: '{elem.dm_code}'",
                         )
 
+    def test_e1_elements_have_coordinates(self):
+        """E1要素が3点以上の座標を持つ"""
+        for dm_path in SAMPLE_DM_FILES:
+            with self.subTest(dm_path=dm_path):
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
+                e1_found = False
+                for group in result.groups:
+                    for elem in group.elements:
+                        if elem.element_type == "E1":
+                            e1_found = True
+                            self.assertGreaterEqual(
+                                len(elem.coordinates),
+                                3,
+                                "E1要素の座標が3点未満",
+                            )
+                self.assertTrue(e1_found, "E1要素が見つからない")
+
+    def test_e1_elements_form_closed_ring(self):
+        """E1要素の座標列が閉じたリングである（先頭点==末尾点）"""
+        for dm_path in SAMPLE_DM_FILES:
+            with self.subTest(dm_path=dm_path):
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
+                for group in result.groups:
+                    for elem in group.elements:
+                        if elem.element_type == "E1":
+                            first = elem.coordinates[0]
+                            last = elem.coordinates[-1]
+                            self.assertEqual(
+                                (first.x, first.y),
+                                (last.x, last.y),
+                                f"E1要素のリングが閉じていない "
+                                f"(dm_code={elem.dm_code}, "
+                                f"id={elem.element_id})",
+                            )
+
     def test_e2_elements_have_coordinates(self):
         """E2要素が座標を持つ"""
         for dm_path in SAMPLE_DM_FILES:
@@ -358,6 +398,17 @@ class TestParseWithSampleData(unittest.TestCase):
                                 0,
                                 "E6要素の座標が空",
                             )
+
+
+class TestParseMapSheet(unittest.TestCase):
+    def test_map_sheet_from_sample(self):
+        """サンプルデータから図郭情報を正しく抽出する"""
+        dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm
+        classified = classify(read_records(dm_path), detect_encoding(dm_path))
+        info = _parse_map_sheet(classified.mesh_rows)
+        self.assertLess(info.origin_x, info.upper_x)
+        self.assertLess(info.origin_y, info.upper_y)
+        self.assertIn(info.coord_unit, (1, 10, 999))
 
 
 if __name__ == "__main__":

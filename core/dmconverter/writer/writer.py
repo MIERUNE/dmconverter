@@ -10,7 +10,6 @@ import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-from qgis.PyQt.QtCore import QVariant
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsFeature,
@@ -20,14 +19,16 @@ from qgis.core import (
     QgsVectorLayer,
     QgsWkbTypes,
 )
+from qgis.PyQt.QtCore import QVariant
 
 from ..constants import CLASSIFICATIONS, get_classification_name
 from ..parser.models import MapSheetInfo, ParsedDM, ParsedElement
 from .crs import get_epsg
-from .geometry import to_line_geometry, to_point_geometry
+from .geometry import to_line_geometry, to_point_geometry, to_polygon_geometry
 
 # 要素タイプ → (ジオメトリタイプ名, WKBタイプ, ジオメトリ変換関数)
 _ELEMENT_TYPE_MAP = {
+    "E1": ("面", QgsWkbTypes.Polygon, to_polygon_geometry),
     "E2": ("線", QgsWkbTypes.LineString, to_line_geometry),
     "E5": ("点", QgsWkbTypes.Point, to_point_geometry),
     "E7": ("注記", QgsWkbTypes.Point, to_point_geometry),
