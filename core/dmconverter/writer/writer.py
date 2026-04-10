@@ -114,6 +114,7 @@ class MergeResult:
     geom_fail_counter: Counter = field(default_factory=Counter)
     errors: list[str] = field(default_factory=list)
     layer_parent_codes: dict[str, str] = field(default_factory=dict)
+    layer_element_types: dict[str, str] = field(default_factory=dict)
 
 
 def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
@@ -149,6 +150,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     geom_fail_counter: Counter = Counter()
     errors: list[str] = []
     layer_parent_codes: dict[str, str] = {}
+    layer_element_types: dict[str, str] = {}
 
     # 衝突するレイヤ名を事前検出
     _name_counts: Counter = Counter()
@@ -231,12 +233,14 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         layer.updateExtents()
         layers.append(layer)
         layer_parent_codes[layer_name] = layer_code[:2]
+        layer_element_types[layer_name] = first_elem.element_type
 
     return MergeResult(
         layers=layers,
         geom_fail_counter=geom_fail_counter,
         errors=errors,
         layer_parent_codes=layer_parent_codes,
+        layer_element_types=layer_element_types,
     )
 
 
