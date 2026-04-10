@@ -10,7 +10,6 @@ import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-from qgis.PyQt.QtCore import QVariant
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsFeature,
@@ -20,14 +19,21 @@ from qgis.core import (
     QgsVectorLayer,
     QgsWkbTypes,
 )
+from qgis.PyQt.QtCore import QVariant
 
 from ..constants import CLASSIFICATIONS, get_classification_name
 from ..parser.models import MapSheetInfo, ParsedDM, ParsedElement
 from .crs import get_epsg
-from .geometry import direction_angle, to_line_geometry, to_point_geometry
+from .geometry import (
+    direction_angle,
+    to_line_geometry,
+    to_point_geometry,
+    to_polygon_geometry,
+)
 
 # 要素タイプ → (ジオメトリタイプ名, WKBタイプ, ジオメトリ変換関数)
 _ELEMENT_TYPE_MAP = {
+    "E1": ("面", QgsWkbTypes.Polygon, to_polygon_geometry),
     "E2": ("線", QgsWkbTypes.LineString, to_line_geometry),
     "E5": ("点", QgsWkbTypes.Point, to_point_geometry),
     "E6": ("方向", QgsWkbTypes.Point, to_point_geometry),
@@ -99,16 +105,23 @@ def _build_direction_fields() -> QgsFields:
     return fields
 
 
-def _get_group_name(layer_code: str) -> str:
-    """上位2桁コードからグループ名を返す。"""
-    group = CLASSIFICATIONS.get(layer_code)
-    if group is not None:
+def _get_layer_name(layer_code: str) -> str:
+    """4桁分類コードからレイヤ名を返す。"""
+    parent_code = layer_code[:2]
+    data_code = layer_code[2:]
+    group = CLASSIFICATIONS.get(parent_code)
+    if group is None:
+        return layer_code
+    if data_code == "00":
         return group["name"]
-    return layer_code
+    data_name = group.get(data_code)
+    if data_name is None:
+        return layer_code
+    return data_name
 
 
 def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
-    """ParsedDM から上位2桁グループのメモリレイヤを作成する。"""
+    """ParsedDM から4桁コード単位のメモリレイヤを作成する。"""
     return create_merged_layers([dm]).layers
 
 
@@ -119,12 +132,13 @@ class MergeResult:
     layers: list[QgsVectorLayer] = field(default_factory=list)
     geom_fail_counter: Counter = field(default_factory=Counter)
     errors: list[str] = field(default_factory=list)
+    layer_parent_codes: dict[str, str] = field(default_factory=dict)
 
 
 def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     """複数ParsedDMからレイヤをマージして作成する。
 
-    同じ分類コード上位2桁×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
+    同じ分類コード4桁×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
     CRSは最初のParsedDMの座標系を使用する。
     各要素のジオメトリ変換にはそれぞれのファイルのmap_sheetを使用する。
     """
@@ -147,12 +161,20 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
                 if type_info is None:
                     continue
                 geom_type_name = type_info[0]
-                layer_code = elem.dm_code[:2]
+                layer_code = elem.dm_code
                 groups[(layer_code, geom_type_name)].append((elem, dm.map_sheet))
 
     layers: list[QgsVectorLayer] = []
     geom_fail_counter: Counter = Counter()
     errors: list[str] = []
+    layer_parent_codes: dict[str, str] = {}
+
+    # 衝突するレイヤ名を事前検出
+    _name_counts: Counter = Counter()
+    for layer_code, geom_type_name in groups:
+        g = _get_layer_name(layer_code)
+        _name_counts[g if g == geom_type_name else f"{g}_{geom_type_name}"] += 1
+    _conflicting_names: set[str] = {n for n, c in _name_counts.items() if c > 1}
 
     for (layer_code, geom_type_name), elem_pairs in groups.items():
         first_elem = elem_pairs[0][0]
@@ -171,12 +193,24 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
             fields = _build_fields()
 
         # レイヤ名: "道路_線", "建物_点", "基準点_注記" など
-        group_name = _get_group_name(layer_code)
+        data_name = _get_layer_name(layer_code)
 
-        if group_name == geom_type_name:
-            layer_name = group_name
+        if data_name == geom_type_name:
+            layer_name = data_name
         else:
-            layer_name = f"{group_name}_{geom_type_name}"
+            layer_name = f"{data_name}_{geom_type_name}"
+
+        # 衝突する場合は親グループ名をプレフィックスに付けて一意化
+        # 例: "方位_線" → "応用測量整飾_方位_線" / "測量記録等_方位_線"
+        # 同一親グループ内で衝突する場合はさらに4桁コードをサフィックスに付ける
+        # 例: "測量記録等_測点名称_注記" → "測量記録等_測点名称_注記_8221"
+        if layer_name in _conflicting_names:
+            parent_name = CLASSIFICATIONS.get(layer_code[:2], {}).get(
+                "name", layer_code[:2]
+            )
+            layer_name = f"{parent_name}_{layer_name}"
+        if layer_name in layer_parent_codes:
+            layer_name = f"{layer_name}_{layer_code}"
 
         # メモリレイヤ作成
         uri = f"{QgsWkbTypes.displayString(wkb_type)}?crs=EPSG:{epsg}"
@@ -225,11 +259,13 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         provider.addFeatures(features)
         layer.updateExtents()
         layers.append(layer)
+        layer_parent_codes[layer_name] = layer_code[:2]
 
     return MergeResult(
         layers=layers,
         geom_fail_counter=geom_fail_counter,
         errors=errors,
+        layer_parent_codes=layer_parent_codes,
     )
 
 
