@@ -9,6 +9,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 SAMPLE_DM_FILES = [
     os.path.join(DATA_DIR, "02JF613.dm"),
     os.path.join(DATA_DIR, "02JF711.dm"),
+    os.path.join(DATA_DIR, "円10件(円弧4件)_08DF013_新潟市中央区拡張2500.dm"),
 ]
 
 
