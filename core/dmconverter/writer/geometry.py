@@ -11,6 +11,8 @@ DM形式の相対座標を絶対座標に変換し、QgsGeometryを生成する�
 
 from __future__ import annotations
 
+import math
+
 from qgis.core import QgsGeometry, QgsPointXY
 
 from ..parser.models import Coordinate, MapSheetInfo, ParsedElement
@@ -51,6 +53,28 @@ def to_line_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGeom
 
 
 def to_point_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGeometry:
-    """E5・E7要素（点・注記）からPoint geometryを生成する。"""
+    """E5・E6・E7要素（点・方向・注記）からPoint geometryを生成する。"""
     point = _to_abs_point(element.coordinates[0], map_sheet)
     return QgsGeometry.fromPointXY(point)
+
+
+def direction_angle(element: ParsedElement) -> float | None:
+    """E6要素から方向角（度）を計算する。
+
+    DM座標系（X=北、Y=東）でY軸（東方向）を0°基準として、
+    記号位置→方向点の方位角を度数で返す（第49条第4項）。
+    座標が2点未満の場合はNoneを返す。
+
+    戻り値の例:
+        +Y方向（東）: 0°
+        +X方向（北）: 90°
+        -Y方向（西）: ±180°
+        -X方向（南）: -90°
+    """
+    if len(element.coordinates) < 2:
+        return None
+    p1 = element.coordinates[0]
+    p2 = element.coordinates[1]
+    dx = p2.x - p1.x  # 北成分
+    dy = p2.y - p1.y  # 東成分
+    return math.degrees(math.atan2(dx, dy))

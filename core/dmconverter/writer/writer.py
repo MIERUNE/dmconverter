@@ -24,13 +24,19 @@ from qgis.PyQt.QtCore import QVariant
 from ..constants import CLASSIFICATIONS, get_classification_name
 from ..parser.models import MapSheetInfo, ParsedDM, ParsedElement
 from .crs import get_epsg
-from .geometry import to_line_geometry, to_point_geometry, to_polygon_geometry
+from .geometry import (
+    direction_angle,
+    to_line_geometry,
+    to_point_geometry,
+    to_polygon_geometry,
+)
 
 # 要素タイプ → (ジオメトリタイプ名, WKBタイプ, ジオメトリ変換関数)
 _ELEMENT_TYPE_MAP = {
     "E1": ("面", QgsWkbTypes.Polygon, to_polygon_geometry),
     "E2": ("線", QgsWkbTypes.LineString, to_line_geometry),
     "E5": ("点", QgsWkbTypes.Point, to_point_geometry),
+    "E6": ("方向", QgsWkbTypes.Point, to_point_geometry),
     "E7": ("注記", QgsWkbTypes.Point, to_point_geometry),
 }
 
@@ -67,6 +73,11 @@ _ANNOTATION_FIELD_DEFS: list[tuple[str, str, QVariant.Type]] = [
     ("line_weight", "線号", QVariant.Int),
 ]
 
+# 方向固有フィールド（E6のみ）
+_DIRECTION_FIELD_DEFS: list[tuple[str, QVariant.Type]] = [
+    ("方向角", QVariant.Double),
+]
+
 
 def _build_fields() -> QgsFields:
     """レイヤの属性フィールドを定義する。"""
@@ -82,6 +93,14 @@ def _build_annotation_fields() -> QgsFields:
     """注記レイヤの属性フィールドを定義する（共通 + 注記固有）。"""
     fields = _build_fields()
     for _, field_name, field_type in _ANNOTATION_FIELD_DEFS:
+        fields.append(QgsField(field_name, field_type))
+    return fields
+
+
+def _build_direction_fields() -> QgsFields:
+    """方向レイヤの属性フィールドを定義する（共通 + 方向固有）。"""
+    fields = _build_fields()
+    for field_name, field_type in _DIRECTION_FIELD_DEFS:
         fields.append(QgsField(field_name, field_type))
     return fields
 
@@ -163,9 +182,15 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         wkb_type = type_info[1]
         geom_func = type_info[2]
 
-        # E7の場合は注記用フィールドを使用
+        # 要素タイプ別フィールド
         is_annotation = first_elem.element_type == "E7"
-        fields = _build_annotation_fields() if is_annotation else _build_fields()
+        is_direction = first_elem.element_type == "E6"
+        if is_annotation:
+            fields = _build_annotation_fields()
+        elif is_direction:
+            fields = _build_direction_fields()
+        else:
+            fields = _build_fields()
 
         # レイヤ名: "道路_線", "建物_点", "基準点_注記" など
         data_name = _get_layer_name(layer_code)
@@ -224,6 +249,11 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
             if is_annotation and elem.annotation is not None:
                 for attr_name, field_name, _ in _ANNOTATION_FIELD_DEFS:
                     feat.setAttribute(field_name, getattr(elem.annotation, attr_name))
+
+            # 方向固有フィールドの設定（E6のみ）
+            if is_direction:
+                for field_name, _ in _DIRECTION_FIELD_DEFS:
+                    feat.setAttribute(field_name, direction_angle(elem))
 
             features.append(feat)
 
