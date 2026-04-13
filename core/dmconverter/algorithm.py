@@ -58,11 +58,10 @@ def _apply_annotation_labels(layer: QgsVectorLayer) -> None:
         QgsProperty.fromExpression('"字の大きさ" / 10'),
     )
 
-    # 文字列の方向: 度単位でそのまま回転角度に設定
+    # 文字列の方向: 度単位で回転角度に設定
     settings.dataDefinedProperties().setProperty(
         QgsPalLayerSettings.Property.LabelRotation,
-        QgsProperty.fromField("文字列の方向"),
-    )
+        QgsProperty.fromExpression('- "文字列の方向"'),
 
     labeling = QgsVectorLayerSimpleLabeling(settings)
     layer.setLabeling(labeling)
