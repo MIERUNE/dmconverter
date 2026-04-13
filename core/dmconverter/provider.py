@@ -5,7 +5,8 @@ import os
 from qgis.core import QgsProcessingProvider
 from qgis.PyQt.QtGui import QIcon
 
-from .algorithm import DmToGeoPackageAlgorithm
+from .algorithm_geopackage_converter import DmToGeoPackageAlgorithm
+from .algorithm_apply_style import ApplyStyleAlgorithm
 
 
 class DmConverterProvider(QgsProcessingProvider):
@@ -23,3 +24,4 @@ class DmConverterProvider(QgsProcessingProvider):
 
     def loadAlgorithms(self):
         self.addAlgorithm(DmToGeoPackageAlgorithm())
+        self.addAlgorithm(ApplyStyleAlgorithm())
