@@ -400,7 +400,9 @@ class TestParseWithSampleData(unittest.TestCase):
                             )
 
 
-CIRCLE_DM_FILE = os.path.join(DATA_DIR, "円10件(円弧4件)_08DF013_新潟市中央区拡張2500.dm")
+CIRCLE_DM_FILE = os.path.join(
+    DATA_DIR, "円10件(円弧4件)_08DF013_新潟市中央区拡張2500.dm"
+)
 
 
 class TestParseE3WithCircleData(unittest.TestCase):
@@ -408,7 +410,9 @@ class TestParseE3WithCircleData(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        classified = classify(read_records(CIRCLE_DM_FILE), detect_encoding(CIRCLE_DM_FILE))
+        classified = classify(
+            read_records(CIRCLE_DM_FILE), detect_encoding(CIRCLE_DM_FILE)
+        )
         parsed = parse(classified)
         cls.e3_elements = [
             elem
@@ -435,7 +439,9 @@ class TestParseE3WithCircleData(unittest.TestCase):
         """E3要素のdm_codeが4桁文字列"""
         for elem in self.e3_elements:
             with self.subTest(element_id=elem.element_id):
-                self.assertEqual(len(elem.dm_code), 4, f"dm_codeが4桁でない: '{elem.dm_code}'")
+                self.assertEqual(
+                    len(elem.dm_code), 4, f"dm_codeが4桁でない: '{elem.dm_code}'"
+                )
 
 
 class TestParseMapSheet(unittest.TestCase):

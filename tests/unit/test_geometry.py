@@ -17,7 +17,9 @@ from core.dmconverter.writer.geometry import to_circle_geometry
 from qgis.core import QgsWkbTypes
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
-CIRCLE_DM_FILE = os.path.join(DATA_DIR, "円10件(円弧4件)_08DF013_新潟市中央区拡張2500.dm")
+CIRCLE_DM_FILE = os.path.join(
+    DATA_DIR, "円10件(円弧4件)_08DF013_新潟市中央区拡張2500.dm"
+)
 
 
 class TestToCircleGeometry(unittest.TestCase):
