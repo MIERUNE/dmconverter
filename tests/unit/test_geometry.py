@@ -6,15 +6,12 @@ QgsCircle等のQGISクラスを使用するため、QGIS環境の初期化が必
 import os
 import unittest
 
-from tests.utilities import get_qgis_app
-
-get_qgis_app()  # QgsCircle等を使用するためにQGISを初期化
-
 from core.dmconverter.parser.classifier import classify
 from core.dmconverter.parser.parser import parse
 from core.dmconverter.parser.reader import detect_encoding, read_records
 from core.dmconverter.writer.geometry import to_circle_geometry
 from qgis.core import QgsWkbTypes
+from tests.utilities import get_qgis_app
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 CIRCLE_DM_FILE = os.path.join(
@@ -27,6 +24,7 @@ class TestToCircleGeometry(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        get_qgis_app()
         classified = classify(
             read_records(CIRCLE_DM_FILE), detect_encoding(CIRCLE_DM_FILE)
         )
