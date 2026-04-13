@@ -25,10 +25,11 @@ from .parser.classifier import classify
 from .parser.parser import parse
 from .parser.reader import read_records
 from .writer.log_writer import write_log
+from .writer.style import apply_annotation_labels
 from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
-_SUPPORTED_TYPES = {"E1", "E2", "E5", "E7"}
+_SUPPORTED_TYPES = {"E1", "E2", "E5", "E6", "E7"}
 
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
@@ -203,6 +204,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self._output_path = output_path
         self._layer_names = [layer.name() for layer in layers]
         self._layer_parent_codes = merge_result.layer_parent_codes
+        self._layer_element_types = merge_result.layer_element_types
 
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加します")
 
@@ -261,6 +263,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
             project.addMapLayer(gpkg_layer, False)
             sub_groups[group_name].addLayer(gpkg_layer)
+
+            # E7注記レイヤにラベル設定を適用
+            if self._layer_element_types.get(name) == "E7":
+                apply_annotation_labels(gpkg_layer)
+
             layer_crs = gpkg_layer.crs()
 
             layer_extent = gpkg_layer.extent()
