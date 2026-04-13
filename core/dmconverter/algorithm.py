@@ -11,18 +11,13 @@ from collections import Counter
 from qgis.core import (
     QgsCoordinateTransform,
     QgsLayerTreeGroup,
-    QgsPalLayerSettings,
     QgsProcessingAlgorithm,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
     QgsProject,
-    QgsProperty,
     QgsRectangle,
-    QgsTextFormat,
-    QgsUnitTypes,
     QgsVectorLayer,
-    QgsVectorLayerSimpleLabeling,
 )
 
 from .constants import CLASSIFICATIONS, get_classification_name
@@ -30,42 +25,11 @@ from .parser.classifier import classify
 from .parser.parser import parse
 from .parser.reader import read_records
 from .writer.log_writer import write_log
+from .writer.style import apply_annotation_labels
 from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
 _SUPPORTED_TYPES = {"E1", "E2", "E5", "E7"}
-
-
-def _apply_annotation_labels(layer: QgsVectorLayer) -> None:
-    """E7注記レイヤにラベル表示設定を適用する。
-
-    DMレコードの注記属性を使い、QGISラベルとして表示する:
-        - 注記内容 → ラベルテキスト
-        - 字の大きさ → フォントサイズ（0.1mm→mm変換）
-        - 文字列の方向 → 回転角度
-    """
-    text_format = QgsTextFormat()
-    text_format.setSizeUnit(QgsUnitTypes.RenderMillimeters)
-    text_format.setSize(1.0)  # デフォルトサイズ（data-definedで上書き）
-
-    settings = QgsPalLayerSettings()
-    settings.fieldName = "注記内容"
-    settings.setFormat(text_format)
-
-    # 字の大きさ: 0.1mm単位 → mm変換（÷10）
-    settings.dataDefinedProperties().setProperty(
-        QgsPalLayerSettings.Property.Size,
-        QgsProperty.fromExpression('"字の大きさ" / 10'),
-    )
-
-    # 文字列の方向: 度単位で回転角度に設定
-    settings.dataDefinedProperties().setProperty(
-        QgsPalLayerSettings.Property.LabelRotation,
-        QgsProperty.fromExpression('- "文字列の方向"'),
-
-    labeling = QgsVectorLayerSimpleLabeling(settings)
-    layer.setLabeling(labeling)
-    layer.setLabelsEnabled(True)
 
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
@@ -302,7 +266,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
             # E7注記レイヤにラベル設定を適用
             if self._layer_element_types.get(name) == "E7":
-                _apply_annotation_labels(gpkg_layer)
+                apply_annotation_labels(gpkg_layer)
 
             layer_crs = gpkg_layer.crs()
 
