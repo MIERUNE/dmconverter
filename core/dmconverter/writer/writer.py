@@ -252,7 +252,8 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
 
             # 方向固有フィールドの設定（E6のみ）
             if is_direction:
-                feat.setAttribute("方向角", direction_angle(elem))
+                for field_name, _ in _DIRECTION_FIELD_DEFS:
+                    feat.setAttribute(field_name, direction_angle(elem))
 
             features.append(feat)
 
