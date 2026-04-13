@@ -8,7 +8,8 @@ from qgis.core import (
 
 class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
     INPUT_GPKG = "INPUT_GPKG"
-    STYLE_FILE = "STYLE_FILE"
+    INPUT_FOLDER = "INPUT_FOLDER"
+    STYLE_FOLDER = "STYLE_FOLDER"
 
     def name(self):
         return "apply_style"
@@ -23,7 +24,11 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         return ""
 
     def shortHelpString(self):
-        return "GeoPackageにQMLスタイルファイルを適用します。"
+        return (
+            "GeoPackageにQMLスタイルフォルダを適用します。どちらか一方を指定してください。\n"
+            "単一ファイル処理：GeoPackageファイルを指定\n"
+            "複数ファイル処理：GeoPackageが格納されたフォルダを指定\n"
+        )
 
     def createInstance(self):
         return ApplyStyleAlgorithm()
@@ -32,18 +37,28 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT_GPKG,
-                "対象のGeoPackage",
+                "入力：GeoPackageファイル",
                 behavior=QgsProcessingParameterFile.File,
                 fileFilter="GeoPackage Files (*.gpkg)",
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterFile(
-                self.STYLE_FILE,
-                "QMLスタイルファイル",
-                behavior=QgsProcessingParameterFile.File,
-                fileFilter="QML Files (*.qml)",
+                self.INPUT_FOLDER,
+                "入力：GeoPackageが格納されたフォルダ",
+                behavior=QgsProcessingParameterFile.Folder,
+                optional=True,
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFile(
+                self.STYLE_FOLDER,
+                "入力：スタイルフォルダ（QML）",
+                behavior=QgsProcessingParameterFile.Folder,
+                optional=True,
             )
         )
 
