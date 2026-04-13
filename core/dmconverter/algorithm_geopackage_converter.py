@@ -25,7 +25,14 @@ from .parser.classifier import classify
 from .parser.parser import parse
 from .parser.reader import read_records
 from .writer.log_writer import write_log
-from .writer.style import apply_annotation_labels
+from .writer.style import (
+    apply_annotation_labels,
+    apply_qml_by_geom_type,
+    build_qml_map,
+    cleanup_qml_tempfiles,
+    export_qlr,
+    write_qml_tempfiles,
+)
 from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
@@ -205,6 +212,8 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self._layer_names = [layer.name() for layer in layers]
         self._layer_parent_codes = merge_result.layer_parent_codes
         self._layer_element_types = merge_result.layer_element_types
+        self._layer_dm_codes = merge_result.layer_dm_codes
+        self._style_folder = self.parameterAsFile(parameters, self.STYLE_FOLDER, context)
 
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加します")
 
@@ -246,6 +255,12 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         dm_group = root.findGroup("DM") or root.insertGroup(0, "DM")
         sub_groups: dict[str, QgsLayerTreeGroup] = {}
 
+        any_loaded = False
+
+        # スタイルフォルダが指定されていればQMLをtempファイルに書き出す（3ファイル上限）
+        style_folder = getattr(self, "_style_folder", "")
+        tmp_map = write_qml_tempfiles(build_qml_map(style_folder)) if style_folder else {}
+
         for name in self._layer_names:
             uri = f"{self._output_path}|layername={name}"
             gpkg_layer = QgsVectorLayer(uri, name, "ogr")
@@ -264,10 +279,17 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             project.addMapLayer(gpkg_layer, False)
             sub_groups[group_name].addLayer(gpkg_layer)
 
+            is_annotation = self._layer_element_types.get(name) == "E7"
+
             # E7注記レイヤにラベル設定を適用
-            if self._layer_element_types.get(name) == "E7":
+            if is_annotation:
                 apply_annotation_labels(gpkg_layer)
 
+            # E7以外にQMLスタイルを適用
+            if tmp_map and not is_annotation:
+                apply_qml_by_geom_type(gpkg_layer, tmp_map, feedback)
+
+            any_loaded = True
             layer_crs = gpkg_layer.crs()
 
             layer_extent = gpkg_layer.extent()
@@ -276,6 +298,21 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                     combined_extent = QgsRectangle(layer_extent)
                 else:
                     combined_extent.combineExtentWith(layer_extent)
+
+        # tempファイルを削除
+        cleanup_qml_tempfiles(tmp_map)
+
+        # DMグループをデフォルト非表示（チェックを入れると全レイヤが一括表示される）
+        dm_group.setItemVisibilityChecked(False)
+
+        # QLRエクスポート（DMグループ階層ごと保存）
+        if style_folder and any_loaded:
+            qlr_path = os.path.splitext(self._output_path)[0] + ".qlr"
+            err = export_qlr([dm_group], qlr_path)
+            if err:
+                feedback.reportError(f"QLRエクスポート失敗: {err}")
+            else:
+                feedback.pushInfo(f"QLR出力完了: {qlr_path}")
 
         # ズーム処理
         if iface is None or combined_extent.isEmpty() or layer_crs is None:

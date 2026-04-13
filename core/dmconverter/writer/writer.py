@@ -134,6 +134,7 @@ class MergeResult:
     errors: list[str] = field(default_factory=list)
     layer_parent_codes: dict[str, str] = field(default_factory=dict)
     layer_element_types: dict[str, str] = field(default_factory=dict)
+    layer_dm_codes: dict[str, str] = field(default_factory=dict)
 
 
 def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
@@ -170,6 +171,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     errors: list[str] = []
     layer_parent_codes: dict[str, str] = {}
     layer_element_types: dict[str, str] = {}
+    layer_dm_codes: dict[str, str] = {}
 
     # 衝突するレイヤ名を事前検出
     _name_counts: Counter = Counter()
@@ -264,6 +266,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         layers.append(layer)
         layer_parent_codes[layer_name] = layer_code[:2]
         layer_element_types[layer_name] = first_elem.element_type
+        layer_dm_codes[layer_name] = layer_code
 
     return MergeResult(
         layers=layers,
@@ -271,6 +274,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         errors=errors,
         layer_parent_codes=layer_parent_codes,
         layer_element_types=layer_element_types,
+        layer_dm_codes=layer_dm_codes,
     )
 
 
