@@ -82,60 +82,37 @@ def build_qml_map(style_folder: str) -> dict[QgsWkbTypes.GeometryType, tuple[str
     return qml_map
 
 
-def write_qml_tempfiles(
-    qml_map: dict[QgsWkbTypes.GeometryType, tuple[str, str]],
-) -> dict[QgsWkbTypes.GeometryType, tuple[str, str]]:
-    """QMLマップのリマップ済みXMLをtempファイルに書き出す。
-
-    ジオメトリタイプごとに1つのtempファイルを作成する（最大3ファイル）。
-    呼び出し側は処理完了後に cleanup_qml_tempfiles() で削除すること。
-
-    Returns:
-        {GeometryType: (tmp_path, filename)} の辞書
-    """
-    tmp_map: dict[QgsWkbTypes.GeometryType, tuple[str, str]] = {}
-    for geom_type, (remapped_xml, fname) in qml_map.items():
-        with tempfile.NamedTemporaryFile(
-            suffix=".qml", mode="w", encoding="utf-8", delete=False
-        ) as tmp:
-            tmp.write(remapped_xml)
-            tmp_map[geom_type] = (tmp.name, fname)
-    return tmp_map
-
-
-def cleanup_qml_tempfiles(
-    tmp_map: dict[QgsWkbTypes.GeometryType, tuple[str, str]],
-) -> None:
-    """write_qml_tempfiles() で作成したtempファイルを削除する。"""
-    for tmp_path, _ in tmp_map.values():
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-
-
 def apply_qml_by_geom_type(
     layer: QgsVectorLayer,
-    tmp_map: dict[QgsWkbTypes.GeometryType, tuple[str, str]],
+    qml_map: dict[QgsWkbTypes.GeometryType, tuple[str, str]],
     feedback=None,
 ) -> bool:
     """ジオメトリタイプに対応するQMLをレイヤに適用する。
 
     Args:
         layer: スタイルを適用するレイヤ
-        tmp_map: write_qml_tempfiles() の戻り値
+        qml_map: build_qml_map() の戻り値
         feedback: QgsProcessingFeedback（任意）
 
     Returns:
         QMLを適用できた場合はTrue
     """
-    if not tmp_map:
+    if not qml_map:
         return False
 
     geom_type = layer.geometryType()
-    if geom_type not in tmp_map:
+    if geom_type not in qml_map:
         return False
 
-    tmp_path, fname = tmp_map[geom_type]
+    remapped_xml, fname = qml_map[geom_type]
+    with tempfile.NamedTemporaryFile(
+        suffix=".qml", mode="w", encoding="utf-8", delete=False
+    ) as tmp:
+        tmp.write(remapped_xml)
+        tmp_path = tmp.name
+
     load_msg, load_ok = layer.loadNamedStyle(tmp_path)
+    os.remove(tmp_path)
 
     if load_ok:
         if feedback is not None:

@@ -29,9 +29,7 @@ from .writer.style import (
     apply_annotation_labels,
     apply_qml_by_geom_type,
     build_qml_map,
-    cleanup_qml_tempfiles,
     export_qlr,
-    write_qml_tempfiles,
 )
 from .writer.writer import create_merged_layers, save_to_geopackage
 
@@ -257,9 +255,9 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
         any_loaded = False
 
-        # スタイルフォルダが指定されていればQMLをtempファイルに書き出す（3ファイル上限）
+        # スタイルフォルダが指定されていればQMLマップを事前構築
         style_folder = getattr(self, "_style_folder", "")
-        tmp_map = write_qml_tempfiles(build_qml_map(style_folder)) if style_folder else {}
+        qml_map = build_qml_map(style_folder) if style_folder else {}
 
         for name in self._layer_names:
             uri = f"{self._output_path}|layername={name}"
@@ -286,8 +284,8 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 apply_annotation_labels(gpkg_layer)
 
             # E7以外にQMLスタイルを適用
-            if tmp_map and not is_annotation:
-                apply_qml_by_geom_type(gpkg_layer, tmp_map, feedback)
+            if qml_map and not is_annotation:
+                apply_qml_by_geom_type(gpkg_layer, qml_map, feedback)
 
             any_loaded = True
             layer_crs = gpkg_layer.crs()
@@ -298,12 +296,6 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                     combined_extent = QgsRectangle(layer_extent)
                 else:
                     combined_extent.combineExtentWith(layer_extent)
-
-        # tempファイルを削除
-        cleanup_qml_tempfiles(tmp_map)
-
-        # DMグループをデフォルト非表示（チェックを入れると全レイヤが一括表示される）
-        dm_group.setItemVisibilityChecked(False)
 
         # QLRエクスポート（DMグループ階層ごと保存）
         if style_folder and any_loaded:

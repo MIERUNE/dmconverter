@@ -14,13 +14,7 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
-from .writer.style import (
-    apply_qml_by_geom_type,
-    build_qml_map,
-    cleanup_qml_tempfiles,
-    export_qlr,
-    write_qml_tempfiles,
-)
+from .writer.style import apply_qml_by_geom_type, build_qml_map, export_qlr
 
 
 class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
@@ -100,13 +94,12 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError("スタイルフォルダを指定してください")
             return {}
 
-        # QMLマップを構築してtempファイルに書き出す（3ファイル上限）
+        # QMLマップを事前構築（フォルダ内のQMLをジオメトリタイプ別に索引化）
         qml_map = build_qml_map(style_folder)
         if not qml_map:
             feedback.reportError("スタイルフォルダ内に有効なQMLファイルが見つかりません")
             return {}
-        tmp_map = write_qml_tempfiles(qml_map)
-        feedback.pushInfo(f"QMLマップ構築完了: {len(tmp_map)}種のジオメトリタイプに対応")
+        feedback.pushInfo(f"QMLマップ構築完了: {len(qml_map)}種のジオメトリタイプに対応")
 
         # 処理対象のGPKGファイルリストを構築
         if input_gpkg:
@@ -124,11 +117,9 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         output_qlr = ""
         for gpkg_path in gpkg_files:
             feedback.pushInfo(f"処理中: {gpkg_path}")
-            qlr_path = self._process_gpkg(gpkg_path, tmp_map, feedback)
+            qlr_path = self._process_gpkg(gpkg_path, qml_map, feedback)
             if qlr_path:
                 output_qlr = qlr_path
-
-        cleanup_qml_tempfiles(tmp_map)
 
         # 単一ファイルモードの場合は出力先パラメータを上書き
         if input_gpkg and output_qlr:
