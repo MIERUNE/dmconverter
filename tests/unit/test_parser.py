@@ -400,6 +400,50 @@ class TestParseWithSampleData(unittest.TestCase):
                             )
 
 
+CIRCLE_DM_FILE = os.path.join(
+    DATA_DIR, "円10件(円弧4件)_08DF013_新潟市中央区拡張2500.dm"
+)
+
+
+class TestParseE3WithCircleData(unittest.TestCase):
+    """E3（円）要素のパーサーテスト（円データファイルを使用）"""
+
+    @classmethod
+    def setUpClass(cls):
+        classified = classify(
+            read_records(CIRCLE_DM_FILE), detect_encoding(CIRCLE_DM_FILE)
+        )
+        parsed = parse(classified)
+        cls.e3_elements = [
+            elem
+            for group in parsed.groups
+            for elem in group.elements
+            if elem.element_type == "E3"
+        ]
+
+    def test_e3_elements_exist(self):
+        """円データファイルにE3要素が含まれる"""
+        self.assertGreater(len(self.e3_elements), 0, "E3要素が見つからない")
+
+    def test_e3_elements_have_three_coordinates(self):
+        """E3要素は円周上の3点座標を持つ（公共測量標準図式 第41条）"""
+        for elem in self.e3_elements:
+            with self.subTest(element_id=elem.element_id):
+                self.assertEqual(
+                    len(elem.coordinates),
+                    3,
+                    f"E3要素の座標が3点でない（element_id={elem.element_id}）",
+                )
+
+    def test_e3_dm_codes_are_4_digits(self):
+        """E3要素のdm_codeが4桁文字列"""
+        for elem in self.e3_elements:
+            with self.subTest(element_id=elem.element_id):
+                self.assertEqual(
+                    len(elem.dm_code), 4, f"dm_codeが4桁でない: '{elem.dm_code}'"
+                )
+
+
 class TestParseMapSheet(unittest.TestCase):
     def test_map_sheet_from_sample(self):
         """サンプルデータから図郭情報を正しく抽出する"""

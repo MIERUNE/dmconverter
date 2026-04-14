@@ -26,6 +26,7 @@ from ..parser.models import MapSheetInfo, ParsedDM, ParsedElement
 from .crs import get_epsg
 from .geometry import (
     direction_angle,
+    to_circle_geometry,
     to_line_geometry,
     to_point_geometry,
     to_polygon_geometry,
@@ -35,6 +36,7 @@ from .geometry import (
 _ELEMENT_TYPE_MAP = {
     "E1": ("面", QgsWkbTypes.Polygon, to_polygon_geometry),
     "E2": ("線", QgsWkbTypes.LineString, to_line_geometry),
+    "E3": ("円", QgsWkbTypes.Polygon, to_circle_geometry),
     "E5": ("点", QgsWkbTypes.Point, to_point_geometry),
     "E6": ("方向", QgsWkbTypes.Point, to_point_geometry),
     "E7": ("注記", QgsWkbTypes.Point, to_point_geometry),
