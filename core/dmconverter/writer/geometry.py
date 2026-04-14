@@ -51,6 +51,8 @@ def to_circle_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGe
 
     円周上の3点からQgsCircleで円を構築し、64セグメントのポリゴンに近似する。
     """
+    if len(element.coordinates) < 3:
+        return QgsGeometry()
     pts = [_to_abs_point(c, map_sheet) for c in element.coordinates[:3]]
     p1 = QgsPoint(pts[0].x(), pts[0].y())
     p2 = QgsPoint(pts[1].x(), pts[1].y())
@@ -67,6 +69,8 @@ def to_arc_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGeome
     円弧上の始点・中間点・終点の3点からQgsCircularStringで円弧を構築し、
     セグメント化したLineStringに近似する（第41条四）。
     """
+    if len(element.coordinates) < 3:
+        return QgsGeometry()
     pts = [_to_abs_point(c, map_sheet) for c in element.coordinates[:3]]
     p1 = QgsPoint(pts[0].x(), pts[0].y())
     p2 = QgsPoint(pts[1].x(), pts[1].y())
