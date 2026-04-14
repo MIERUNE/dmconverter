@@ -56,6 +56,8 @@ def to_circle_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGe
     p2 = QgsPoint(pts[1].x(), pts[1].y())
     p3 = QgsPoint(pts[2].x(), pts[2].y())
     circle = QgsCircle.from3Points(p1, p2, p3)
+    if circle.isEmpty():
+        return QgsGeometry()
     return QgsGeometry(circle.toPolygon(64))
 
 
