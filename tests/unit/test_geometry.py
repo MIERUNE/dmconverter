@@ -9,7 +9,7 @@ import unittest
 from core.dmconverter.parser.classifier import classify
 from core.dmconverter.parser.parser import parse
 from core.dmconverter.parser.reader import detect_encoding, read_records
-from core.dmconverter.writer.geometry import to_circle_geometry
+from core.dmconverter.writer.geometry import to_arc_geometry, to_circle_geometry
 from qgis.core import QgsWkbTypes
 from tests.utilities import get_qgis_app
 
@@ -63,6 +63,41 @@ class TestToCircleGeometry(unittest.TestCase):
                     (ring[0].x(), ring[0].y()),
                     (ring[-1].x(), ring[-1].y()),
                     "リングが閉じていない",
+                )
+
+
+class TestToArcGeometry(unittest.TestCase):
+    """to_arc_geometry 関数のユニットテスト"""
+
+    @classmethod
+    def setUpClass(cls):
+        get_qgis_app()
+        classified = classify(
+            read_records(CIRCLE_DM_FILE), detect_encoding(CIRCLE_DM_FILE)
+        )
+        parsed = parse(classified)
+        cls.map_sheet = parsed.map_sheet
+        cls.e4_elements = [
+            elem
+            for group in parsed.groups
+            for elem in group.elements
+            if elem.element_type == "E4"
+        ]
+
+    def test_e4_elements_exist(self):
+        """円弧データファイルにE4要素が含まれる（前提確認）"""
+        self.assertGreater(len(self.e4_elements), 0, "E4要素が見つからない")
+
+    def test_returns_line_geometry(self):
+        """to_arc_geometry がLineStringジオメトリを返す"""
+        for elem in self.e4_elements:
+            with self.subTest(element_id=elem.element_id):
+                geom = to_arc_geometry(elem, self.map_sheet)
+                self.assertFalse(geom.isEmpty(), "生成されたジオメトリが空")
+                self.assertEqual(
+                    geom.type(),
+                    QgsWkbTypes.LineGeometry,
+                    "ジオメトリタイプがLineStringでない",
                 )
 
 
