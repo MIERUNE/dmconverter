@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from qgis.core import (
     Qgis,
+    QgsNullSymbolRenderer,
     QgsPalLayerSettings,
     QgsProperty,
     QgsTextFormat,
@@ -32,7 +33,14 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
     text_format.setOrientation(Qgis.TextOrientation.Horizontal)
 
     settings = QgsPalLayerSettings()
-    settings.fieldName = "注記内容"
+    # 縦書き時のみ伸ばし棒・括弧を縦書き用文字に置換（表示のみ、データは変わらない）
+    settings.isExpression = True
+    settings.fieldName = (
+        'CASE WHEN "縦横区分" = 1'
+        " THEN replace(replace(replace(\"注記内容\", 'ー', '｜'), '（', '︵'), '）', '︶')"
+        ' ELSE "注記内容"'
+        " END"
+    )
     settings.setFormat(text_format)
 
     # 字の大きさ: 0.1mm単位 → mm変換（÷10）
@@ -68,6 +76,31 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
         QgsProperty.fromExpression('"字隔" / 10'),
     )
 
+    # ラベル位置をフィーチャのジオメトリに固定
+    settings.dataDefinedProperties().setProperty(
+        QgsPalLayerSettings.Property.PositionX,
+        QgsProperty.fromExpression("x($geometry)"),
+    )
+    settings.dataDefinedProperties().setProperty(
+        QgsPalLayerSettings.Property.PositionY,
+        QgsProperty.fromExpression("y($geometry)"),
+    )
+
+    # 基準点アライメント（仕様書: 横書き=左下, 縦書き=左上）
+    settings.dataDefinedProperties().setProperty(
+        QgsPalLayerSettings.Property.Hali,
+        QgsProperty.fromExpression("'left'"),
+    )
+    settings.dataDefinedProperties().setProperty(
+        QgsPalLayerSettings.Property.Vali,
+        QgsProperty.fromExpression(
+            "CASE WHEN \"縦横区分\" = 1 THEN 'top' ELSE 'bottom' END"
+        ),
+    )
+
     labeling = QgsVectorLayerSimpleLabeling(settings)
     layer.setLabeling(labeling)
     layer.setLabelsEnabled(True)
+
+    # 注記の原点（ポイントシンボル）を非表示にする
+    layer.setRenderer(QgsNullSymbolRenderer())
