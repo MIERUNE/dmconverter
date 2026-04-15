@@ -47,10 +47,10 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
     settings.dataDefinedProperties().setProperty(
         QgsPalLayerSettings.Property.LabelRotation,
         QgsProperty.fromExpression(
-            'CASE'
+            "CASE"
             ' WHEN "縦横区分" = 1 THEN -("文字列の方向" + 90)'
             ' ELSE -"文字列の方向"'
-            ' END'
+            " END"
         ),
     )
 
@@ -58,10 +58,7 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
     settings.dataDefinedProperties().setProperty(
         QgsPalLayerSettings.Property.TextOrientation,
         QgsProperty.fromExpression(
-            "CASE"
-            " WHEN \"縦横区分\" = 1 THEN 'vertical'"
-            " ELSE 'horizontal'"
-            " END"
+            "CASE WHEN \"縦横区分\" = 1 THEN 'vertical' ELSE 'horizontal' END"
         ),
     )
 
