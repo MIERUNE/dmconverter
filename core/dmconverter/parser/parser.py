@@ -195,6 +195,16 @@ def _parse_point_element(record: str) -> ParsedElement:
     """E5（点）を解析する。座標はE行自体に埋め込まれている。"""
     fields = _extract_common_fields(record)
 
+    # レコード長チェック（座標・属性取得には58bytes必要）
+    if len(record) < 58:
+        msg = (
+            f"E5 {fields['dm_code']} 要素ID={fields['element_id']}: "
+            f"不正なレコード長 {len(record)} bytes（最低58bytes必要）"
+        )
+        logger.warning(msg)
+        _parse_warnings.append(msg)
+        return _build_parsed_element(fields, coordinates=())
+
     x_val = _safe_int(record[35:42])
     y_val = _safe_int(record[42:49])
     z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
@@ -287,6 +297,16 @@ def _parse_attribute_element(
 ) -> ParsedElement:
     """E8（属性）を解析する。代表点座標はE行、属性データは後続行から取得。"""
     fields = _extract_common_fields(record)
+
+    # レコード長チェック（座標取得には56bytes必要）
+    if len(record) < 56:
+        msg = (
+            f"E8 {fields['dm_code']} 要素ID={fields['element_id']}: "
+            f"不正なレコード長 {len(record)} bytes（最低56bytes必要）"
+        )
+        logger.warning(msg)
+        _parse_warnings.append(msg)
+        return _build_parsed_element(fields, coordinates=())
 
     # 代表点座標（E5と同じ位置）
     x_val = _safe_int(record[35:42])
