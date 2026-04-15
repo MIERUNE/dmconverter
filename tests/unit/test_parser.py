@@ -16,6 +16,7 @@ from core.dmconverter.parser.parser import (
     _parse_map_sheet,
     _parse_mesh_info,
     _parse_point_element,
+    _parse_warnings,
     _safe_int,
     parse,
 )
@@ -156,6 +157,15 @@ class TestParsePointElement(unittest.TestCase):
         self.assertEqual(elem.coordinates[0].x, 753060)
         self.assertEqual(elem.coordinates[0].y, 1721853)
 
+    def test_e5_short_record_returns_empty_coordinates(self):
+        """E5レコードが58bytes未満の場合、座標なしで返しwarningを追加する"""
+        short_record = "E52253 0   0   1 2 00350 00   0   0"  # 35bytes
+        _parse_warnings.clear()
+        elem = _parse_point_element(short_record)
+        self.assertEqual(elem.coordinates, ())
+        self.assertEqual(len(_parse_warnings), 1)
+        self.assertIn("不正なレコード長", _parse_warnings[0])
+
 
 class TestParseMeshInfo(unittest.TestCase):
     def test_coordinate_system(self):
@@ -209,6 +219,26 @@ class TestParseAnnotationElement(unittest.TestCase):
         self.assertIsNone(elem.annotation)
         self.assertEqual(len(elem.coordinates), 1)
 
+    def test_e7_short_record_returns_empty_coordinates(self):
+        """E7レコードが56bytes未満の場合、座標なしで返しwarningを追加する"""
+        short_record = "E77101 0   0   2 2 04352 00   3   1"  # 35bytes
+        _parse_warnings.clear()
+        elem = _parse_annotation_element(short_record, ())
+        self.assertEqual(elem.coordinates, ())
+        self.assertEqual(len(_parse_warnings), 1)
+        self.assertIn("不正なレコード長", _parse_warnings[0])
+
+    def test_e7_short_annotation_line_returns_no_annotation(self):
+        """後続行が20bytes未満の場合、座標はあるがannotationなしでwarningを追加する"""
+        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        short_annotation = "0    -28   15"  # 13bytes
+        _parse_warnings.clear()
+        elem = _parse_annotation_element(record, (short_annotation,))
+        self.assertEqual(len(elem.coordinates), 1)
+        self.assertIsNone(elem.annotation)
+        self.assertEqual(len(_parse_warnings), 1)
+        self.assertIn("不正な注記後続レコード長", _parse_warnings[0])
+
 
 class TestParseAttributeElement(unittest.TestCase):
     def test_e8_coordinates(self):
@@ -234,6 +264,15 @@ class TestParseAttributeElement(unittest.TestCase):
         record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
         elem = _parse_attribute_element(record, ())
         self.assertIsNone(elem.attribute)
+
+    def test_e8_short_record_returns_empty_coordinates(self):
+        """E8レコードが56bytes未満の場合、座標なしで返しwarningを追加する"""
+        short_record = "E87101 0   0   1 2 00350 00   1   1"  # 35bytes
+        _parse_warnings.clear()
+        elem = _parse_attribute_element(short_record, ())
+        self.assertEqual(elem.coordinates, ())
+        self.assertEqual(len(_parse_warnings), 1)
+        self.assertIn("不正なレコード長", _parse_warnings[0])
 
 
 class TestParseE7WithSampleData(unittest.TestCase):
