@@ -29,7 +29,7 @@ from .writer.style import apply_annotation_labels
 from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
-_SUPPORTED_TYPES = {"E1", "E2", "E3", "E4", "E5", "E6", "E7"}
+_SUPPORTED_TYPES = {"E1", "E2", "E3", "E5", "E6", "E7"}
 
 
 class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
@@ -217,6 +217,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         # ログ出力
         output_log = self.parameterAsBool(parameters, self.OUTPUT_LOG, context)
         if output_log:
+            parse_warnings = [w for p in parsed_list for w in p.parse_warnings]
             log_path = write_log(
                 dm_files,
                 parsed_list[0],
@@ -224,7 +225,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 stats,
                 _SUPPORTED_TYPES,
                 merge_result.geom_fail_counter,
-                merge_result.errors,
+                merge_result.errors + parse_warnings,
                 skipped_files,
             )
             feedback.pushInfo(f"変換ログ出力: {log_path}")
@@ -328,7 +329,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             "E1": "面",
             "E2": "線",
             "E3": "円",
-            "E4": "円弧",
+            "E4": "弧",
             "E5": "点",
             "E6": "方向",
             "E7": "注記",
