@@ -182,7 +182,7 @@ def _parse_coords_from_lines(
 def _parse_line_area_element(
     record: str, coord_lines: tuple[str, ...]
 ) -> ParsedElement:
-    """E1-E4（面・線・円・弧）を解析する。座標は後続行から取得。"""
+    """E1-E4（面・線・円・円弧）を解析する。座標は後続行から取得。"""
     fields = _extract_common_fields(record)
     coordinates = _parse_coords_from_lines(fields, coord_lines)
     return _build_parsed_element(fields, coordinates=coordinates)
