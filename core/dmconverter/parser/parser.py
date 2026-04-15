@@ -190,6 +190,14 @@ def _parse_line_area_element(
     return _build_parsed_element(fields, coordinates=coordinates)
 
 
+def _extract_embedded_coordinate(record: str, fields: dict) -> tuple[Coordinate, ...]:
+    """E5/E7/E8の埋め込み代表点座標を抽出する（record[35:56]）。"""
+    x_val = _safe_int(record[35:42])
+    y_val = _safe_int(record[42:49])
+    z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
+    return (Coordinate(x=x_val, y=y_val, z=z_val),)
+
+
 def _parse_point_element(record: str, warnings: list[str]) -> ParsedElement:
     """E5（点）を解析する。座標はE行自体に埋め込まれている。"""
     fields = _extract_common_fields(record)
@@ -204,11 +212,7 @@ def _parse_point_element(record: str, warnings: list[str]) -> ParsedElement:
         warnings.append(msg)
         return _build_parsed_element(fields, coordinates=())
 
-    x_val = _safe_int(record[35:42])
-    y_val = _safe_int(record[42:49])
-    z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
-
-    coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
+    coordinates = _extract_embedded_coordinate(record, fields)
 
     attribute_value = _safe_int(record[49:56])
     zokusei_kubun = _safe_int(record[56:58])
@@ -245,10 +249,7 @@ def _parse_annotation_element(
         return _build_parsed_element(fields, coordinates=())
 
     # 代表点座標（E5と同じ位置）
-    x_val = _safe_int(record[35:42])
-    y_val = _safe_int(record[42:49])
-    z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
-    coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
+    coordinates = _extract_embedded_coordinate(record, fields)
 
     # 後続注記レコードの解析
     annotation: AnnotationInfo | None = None
@@ -308,10 +309,7 @@ def _parse_attribute_element(
         return _build_parsed_element(fields, coordinates=())
 
     # 代表点座標（E5と同じ位置）
-    x_val = _safe_int(record[35:42])
-    y_val = _safe_int(record[42:49])
-    z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
-    coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
+    coordinates = _extract_embedded_coordinate(record, fields)
 
     # 後続属性レコードの解析（レコード全体が属性データ）
     attribute: AttributeInfo | None = None
