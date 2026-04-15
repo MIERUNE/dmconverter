@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from qgis.core import (
+    Qgis,
     QgsPalLayerSettings,
     QgsProperty,
     QgsTextFormat,
@@ -21,11 +22,14 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
     DMレコードの注記属性を使い、QGISラベルとして表示する:
         - 注記内容 → ラベルテキスト
         - 字の大きさ → フォントサイズ（0.1mm→mm変換）
-        - 文字列の方向 → 回転角度
+        - 文字列の方向 → 回転角度（縦横区分に応じて補正）
+        - 縦横区分 → テキストの向き（横書き/縦書き）
+        - 字隔 → 文字間隔（0.1mm→mm変換）
     """
     text_format = QgsTextFormat()
     text_format.setSizeUnit(QgsUnitTypes.RenderMillimeters)
     text_format.setSize(1.0)  # デフォルトサイズ（data-definedで上書き）
+    text_format.setOrientation(Qgis.TextOrientation.Horizontal)
 
     settings = QgsPalLayerSettings()
     settings.fieldName = "注記内容"
@@ -37,10 +41,34 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
         QgsProperty.fromExpression('"字の大きさ" / 10'),
     )
 
-    # 文字列の方向: DM（反時計回り正）→ QGIS（時計回り正）のため符号反転
+    # 文字列の方向: DM（反時計回り正）→ QGIS（時計回り正）
+    # 横書き: 符号反転のみ
+    # 縦書き: -90°を基準にオフセットを取り符号反転
     settings.dataDefinedProperties().setProperty(
         QgsPalLayerSettings.Property.LabelRotation,
-        QgsProperty.fromExpression('- "文字列の方向"'),
+        QgsProperty.fromExpression(
+            'CASE'
+            ' WHEN "縦横区分" = 1 THEN -("文字列の方向" + 90)'
+            ' ELSE -"文字列の方向"'
+            ' END'
+        ),
+    )
+
+    # 縦横区分: 0=横書き, 1=縦書き
+    settings.dataDefinedProperties().setProperty(
+        QgsPalLayerSettings.Property.TextOrientation,
+        QgsProperty.fromExpression(
+            "CASE"
+            " WHEN \"縦横区分\" = 1 THEN 'vertical'"
+            " ELSE 'horizontal'"
+            " END"
+        ),
+    )
+
+    # 字隔: 0.1mm単位 → mm変換（÷10）
+    settings.dataDefinedProperties().setProperty(
+        QgsPalLayerSettings.Property.FontLetterSpacing,
+        QgsProperty.fromExpression('"字隔" / 10'),
     )
 
     labeling = QgsVectorLayerSimpleLabeling(settings)
