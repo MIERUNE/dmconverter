@@ -491,7 +491,6 @@ class TestParseE3WithCircleData(unittest.TestCase):
                 )
 
 
-
 class TestParseMapSheet(unittest.TestCase):
     def test_map_sheet_from_sample(self):
         """サンプルデータから図郭情報を正しく抽出する"""

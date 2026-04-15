@@ -330,7 +330,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             "E1": "面",
             "E2": "線",
             "E3": "円",
-            "E4": "弧",
+            "E4": "円弧",
             "E5": "点",
             "E6": "方向",
             "E7": "注記",

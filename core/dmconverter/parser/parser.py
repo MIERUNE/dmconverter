@@ -335,7 +335,9 @@ _COORD_LINE_PARSERS = {
 }
 
 
-def _parse_element(elem: ElementRecord, encoding: str, warnings: list[str]) -> ParsedElement:
+def _parse_element(
+    elem: ElementRecord, encoding: str, warnings: list[str]
+) -> ParsedElement:
     """ElementRecordを要素タイプに応じて解析する。"""
     record = elem.record.decode(encoding, errors="replace")
     coord_lines = tuple(
@@ -361,11 +363,15 @@ def _parse_element(elem: ElementRecord, encoding: str, warnings: list[str]) -> P
     return _build_parsed_element(fields, coordinates=())
 
 
-def _parse_element_group(group: ElementGroup, encoding: str, warnings: list[str]) -> ParsedGroup:
+def _parse_element_group(
+    group: ElementGroup, encoding: str, warnings: list[str]
+) -> ParsedGroup:
     """ElementGroupを解析する。"""
     header = group.header.decode(encoding, errors="replace")
     dm_code = header[2:6].strip()
-    elements = tuple(_parse_element(elem, encoding, warnings) for elem in group.elements)
+    elements = tuple(
+        _parse_element(elem, encoding, warnings) for elem in group.elements
+    )
     return ParsedGroup(dm_code=dm_code, elements=elements)
 
 
@@ -434,7 +440,8 @@ def parse(classified: ClassifiedRecords) -> ParsedDM:
     mesh_info = _parse_mesh_info(classified.mesh_rows, enc)
     map_sheet = _parse_map_sheet(classified.mesh_rows)
     groups = tuple(
-        _parse_element_group(group, enc, warnings) for group in classified.element_groups
+        _parse_element_group(group, enc, warnings)
+        for group in classified.element_groups
     )
     return ParsedDM(
         mesh_info=mesh_info,
