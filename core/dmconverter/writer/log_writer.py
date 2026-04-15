@@ -40,7 +40,10 @@ def write_log(
 
     Args:
         dm_files: 入力DMファイルパスのリスト
-        parsed: 最初のParsedDM（座標系情報の取得用）
+        parsed: 最初のParsedDM（座標系情報・図郭名の取得用）
+        layers: 出力レイヤのリスト（レイヤ数の記録用）
+        stats: 変換統計情報（code_counter / type_counter / no_coords_counter）
+        supported_types: 変換対応済み要素タイプの集合
         geom_fail_counter: Counter of (element_type, dm_code) → ジオメトリ変換失敗件数
         errors: 個別エラーメッセージのリスト
         skipped_files: 座標系不一致でスキップされたファイルの説明リスト
