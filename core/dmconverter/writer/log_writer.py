@@ -34,6 +34,7 @@ def write_log(
     geom_fail_counter=None,
     errors=None,
     skipped_files=None,
+    parse_warnings=None,
 ):
     """変換結果のサマリーをテキストファイルに出力する。
 
@@ -43,6 +44,7 @@ def write_log(
         geom_fail_counter: Counter of (element_type, dm_code) → ジオメトリ変換失敗件数
         errors: 個別エラーメッセージのリスト
         skipped_files: 座標系不一致でスキップされたファイルの説明リスト
+        parse_warnings: 不正レコードによる警告メッセージのリスト
 
     Returns:
         ログファイルのパス
@@ -53,6 +55,8 @@ def write_log(
         errors = []
     if skipped_files is None:
         skipped_files = []
+    if parse_warnings is None:
+        parse_warnings = []
 
     first_file = dm_files[0]
     input_dir = os.path.dirname(first_file)
@@ -161,6 +165,12 @@ def write_log(
         lines.extend(["", "--- エラー ---"])
         for err in errors:
             lines.append(f"  {err}")
+
+    # 不正レコード警告
+    if parse_warnings:
+        lines.extend(["", "--- 不正レコード ---"])
+        for w in parse_warnings:
+            lines.append(f"  {w}")
 
     with open(log_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
