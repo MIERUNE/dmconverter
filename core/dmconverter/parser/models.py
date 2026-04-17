@@ -40,8 +40,10 @@ class AttributeInfo:
 class ParsedElement:
     """解析済み要素"""
 
+     
     element_type: str  # "E1"-"E8"
     dm_code: str  # 4桁分類コード
+    item_code: str  # 分類コード項目（2桁）
     chiiki_bunrui: int  # 地域分類
     jouhou_bunrui: int  # 情報分類
     element_id: int  # 要素識別番号
