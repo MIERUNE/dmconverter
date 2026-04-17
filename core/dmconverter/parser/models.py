@@ -40,7 +40,6 @@ class AttributeInfo:
 class ParsedElement:
     """解析済み要素"""
 
-     
     element_type: str  # "E1"-"E8"
     dm_code: str  # 4桁分類コード
     item_code: str  # 分類コード項目（2桁）
