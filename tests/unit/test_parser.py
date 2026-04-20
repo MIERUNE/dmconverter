@@ -131,6 +131,8 @@ class TestExtractCommonFields(unittest.TestCase):
         fields = _extract_common_fields(record)
         self.assertEqual(fields["element_type"], "E2")
         self.assertEqual(fields["dm_code"], "2101")
+        self.assertEqual(fields["chiiki_bunrui"], 0)
+        self.assertEqual(fields["jouhou_bunrui"], 0)
         self.assertEqual(fields["hierarchy"], 1)
         self.assertEqual(fields["data_kubun"], 2)
         self.assertEqual(fields["coord_count"], 80)
@@ -142,7 +144,16 @@ class TestExtractCommonFields(unittest.TestCase):
         fields = _extract_common_fields(record)
         self.assertEqual(fields["element_type"], "E5")
         self.assertEqual(fields["dm_code"], "2253")
+        self.assertEqual(fields["chiiki_bunrui"], 0)
+        self.assertEqual(fields["jouhou_bunrui"], 0)
         self.assertEqual(fields["coord_count"], 0)
+
+    def test_chiiki_and_jouhou_bunrui_field_widths(self):
+        """chiiki_bunrui(I2) と jouhou_bunrui(I4) のオフセット・桁数を検証する"""
+        record = "E22101 21234   0 1212 00 00  80  14      0      0      0 0       170300000000      1"
+        fields = _extract_common_fields(record)
+        self.assertEqual(fields["chiiki_bunrui"], 2)  # record[6:8]  = " 2"
+        self.assertEqual(fields["jouhou_bunrui"], 1234)  # record[8:12] = "1234"
 
 
 class TestParsePointElement(unittest.TestCase):

@@ -49,7 +49,6 @@ _ELEMENT_TYPE_MAP = {
 _FIELD_DEFS: list[tuple[str, str, QVariant.Type]] = [
     ("element_type", "レコードタイプ", QVariant.String),
     ("dm_code", "分類コード", QVariant.String),
-    ("item_code", "項目", QVariant.String),
     ("chiiki_bunrui", "地域分類", QVariant.Int),
     ("jouhou_bunrui", "情報分類", QVariant.Int),
     ("element_id", "要素識別番号", QVariant.Int),

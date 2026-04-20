@@ -110,9 +110,8 @@ def _extract_common_fields(record: str) -> dict:
     return {
         "element_type": record[0:2],  # A2: レコードタイプ
         "dm_code": record[2:6].strip(),  # I4: 分類コード（レイヤ）
-        "item_code": record[6:8].strip(),  # I2: 分類コード（項目）
-        "chiiki_bunrui": _safe_int(record[8:10]),  # I2: 地域分類
-        "jouhou_bunrui": _safe_int(record[10:12]),  # I2: 情報分類
+        "chiiki_bunrui": _safe_int(record[6:8]),  # I2: 地域分類
+        "jouhou_bunrui": _safe_int(record[8:12]),  # I4: 情報分類
         "element_id": _safe_int(record[12:16]),  # I4: 要素識別番号
         "hierarchy": _safe_int(record[16:18]),  # I2: 階層レベル
         "zukei_kubun": _safe_int(record[18:20]),  # I2: 図形区分
@@ -134,7 +133,6 @@ def _build_parsed_element(fields: dict, **kwargs) -> ParsedElement:
     return ParsedElement(
         element_type=fields["element_type"],
         dm_code=fields["dm_code"],
-        item_code=fields["item_code"],
         chiiki_bunrui=fields["chiiki_bunrui"],
         jouhou_bunrui=fields["jouhou_bunrui"],
         element_id=fields["element_id"],
