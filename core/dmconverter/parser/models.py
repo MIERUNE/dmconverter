@@ -97,3 +97,4 @@ class ParsedDM:
     mesh_info: MeshInfo
     map_sheet: MapSheetInfo
     groups: tuple[ParsedGroup, ...]
+    parse_warnings: tuple[str, ...] = ()

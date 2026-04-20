@@ -217,6 +217,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         # ログ出力
         output_log = self.parameterAsBool(parameters, self.OUTPUT_LOG, context)
         if output_log:
+            parse_warnings = [w for p in parsed_list for w in p.parse_warnings]
             log_path = write_log(
                 dm_files,
                 parsed_list[0],
@@ -226,6 +227,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 merge_result.geom_fail_counter,
                 merge_result.errors,
                 skipped_files,
+                parse_warnings=parse_warnings,
             )
             feedback.pushInfo(f"変換ログ出力: {log_path}")
 
