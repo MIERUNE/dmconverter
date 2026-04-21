@@ -15,6 +15,7 @@ from qgis.core import (
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
+    QgsProcessingParameterString,
     QgsProject,
     QgsRectangle,
     QgsVectorLayer,
@@ -38,6 +39,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     OUTPUT = "OUTPUT"
     OUTPUT_LOG = "OUTPUT_LOG"
     STYLE_FOLDER = "STYLE_FOLDER"
+    GROUP_NAME = "GROUP_NAME"
 
     def name(self):
         """アルゴリズムの内部ID"""
@@ -95,6 +97,15 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 "入力：スタイルフォルダ（QML）",
                 behavior=QgsProcessingParameterFile.Folder,
                 optional=True,
+            )
+        )
+
+        # オプション: グループ名
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.GROUP_NAME,
+                "グループ名",
+                defaultValue="DM",
             )
         )
 
@@ -205,6 +216,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self._layer_names = [layer.name() for layer in layers]
         self._layer_parent_codes = merge_result.layer_parent_codes
         self._layer_element_types = merge_result.layer_element_types
+        self._group_name = self.parameterAsString(parameters, self.GROUP_NAME, context)
 
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加します")
 
@@ -245,7 +257,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         layer_crs = None
 
         root = project.layerTreeRoot()
-        dm_group = root.findGroup("DM") or root.insertGroup(0, "DM")
+        dm_group = root.findGroup(self._group_name) or root.insertGroup(0, self._group_name)
         sub_groups: dict[str, QgsLayerTreeGroup] = {}
 
         for name in self._layer_names:
