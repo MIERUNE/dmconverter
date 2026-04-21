@@ -216,7 +216,8 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self._layer_names = [layer.name() for layer in layers]
         self._layer_parent_codes = merge_result.layer_parent_codes
         self._layer_element_types = merge_result.layer_element_types
-        self._group_name = self.parameterAsString(parameters, self.GROUP_NAME, context)
+        group_name = self.parameterAsString(parameters, self.GROUP_NAME, context).strip()
+        self._group_name = group_name if group_name else "DM"
 
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加します")
 
@@ -249,7 +250,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         """レイヤをプロジェクトに追加し、マップキャンバスを全体表示にズームする。"""
         from qgis.utils import iface
 
-        if not hasattr(self, "_output_path") or not hasattr(self, "_layer_names"):
+        if not hasattr(self, "_output_path") or not hasattr(self, "_layer_names") or not hasattr(self, "_group_name"):
             return {}
 
         project = QgsProject.instance()
