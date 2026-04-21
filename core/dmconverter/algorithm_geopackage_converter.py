@@ -257,7 +257,9 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         layer_crs = None
 
         root = project.layerTreeRoot()
-        dm_group = root.findGroup(self._group_name) or root.insertGroup(0, self._group_name)
+        dm_group = root.findGroup(self._group_name) or root.insertGroup(
+            0, self._group_name
+        )
         sub_groups: dict[str, QgsLayerTreeGroup] = {}
 
         for name in self._layer_names:
