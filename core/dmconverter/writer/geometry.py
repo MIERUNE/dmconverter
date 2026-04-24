@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 
-from qgis.core import QgsGeometry, QgsPointXY
+from qgis.core import QgsCircle, QgsCircularString, QgsGeometry, QgsPoint, QgsPointXY
 
 from ..parser.models import Coordinate, MapSheetInfo, ParsedElement
 
@@ -44,6 +44,42 @@ def to_polygon_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsG
     """E1要素からPolygon geometryを生成する。"""
     points = [_to_abs_point(c, map_sheet) for c in element.coordinates]
     return QgsGeometry.fromPolygonXY([points])
+
+
+def to_circle_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGeometry:
+    """E3要素（円）からPolygon geometryを生成する。
+
+    円周上の3点からQgsCircleで円を構築し、64セグメントのポリゴンに近似する。
+    """
+    if len(element.coordinates) < 3:
+        return QgsGeometry()
+    pts = [_to_abs_point(c, map_sheet) for c in element.coordinates[:3]]
+    p1 = QgsPoint(pts[0].x(), pts[0].y())
+    p2 = QgsPoint(pts[1].x(), pts[1].y())
+    p3 = QgsPoint(pts[2].x(), pts[2].y())
+    circle = QgsCircle.from3Points(p1, p2, p3)
+    if circle.isEmpty():
+        return QgsGeometry()
+    return QgsGeometry(circle.toPolygon(64))
+
+
+def to_arc_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGeometry:
+    """E4要素（円弧）からLineString geometryを生成する。
+
+    円弧上の始点・中間点・終点の3点からQgsCircularStringで円弧を構築し、
+    セグメント化したLineStringに近似する（第41条四）。
+    """
+    if len(element.coordinates) < 3:
+        return QgsGeometry()
+    pts = [_to_abs_point(c, map_sheet) for c in element.coordinates[:3]]
+    p1 = QgsPoint(pts[0].x(), pts[0].y())
+    p2 = QgsPoint(pts[1].x(), pts[1].y())
+    p3 = QgsPoint(pts[2].x(), pts[2].y())
+    arc = QgsCircularString()
+    arc.setPoints([p1, p2, p3])
+    if arc.isEmpty():
+        return QgsGeometry()
+    return QgsGeometry(arc.segmentize())
 
 
 def to_line_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGeometry:

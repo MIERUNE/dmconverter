@@ -26,6 +26,8 @@ from ..parser.models import MapSheetInfo, ParsedDM, ParsedElement
 from .crs import get_epsg
 from .geometry import (
     direction_angle,
+    to_arc_geometry,
+    to_circle_geometry,
     to_line_geometry,
     to_point_geometry,
     to_polygon_geometry,
@@ -35,6 +37,8 @@ from .geometry import (
 _ELEMENT_TYPE_MAP = {
     "E1": ("面", QgsWkbTypes.Polygon, to_polygon_geometry),
     "E2": ("線", QgsWkbTypes.LineString, to_line_geometry),
+    "E3": ("円", QgsWkbTypes.Polygon, to_circle_geometry),
+    "E4": ("円弧", QgsWkbTypes.LineString, to_arc_geometry),
     "E5": ("点", QgsWkbTypes.Point, to_point_geometry),
     "E6": ("方向", QgsWkbTypes.Point, to_point_geometry),
     "E7": ("注記", QgsWkbTypes.Point, to_point_geometry),
@@ -45,7 +49,6 @@ _ELEMENT_TYPE_MAP = {
 _FIELD_DEFS: list[tuple[str, str, QVariant.Type]] = [
     ("element_type", "レコードタイプ", QVariant.String),
     ("dm_code", "分類コード", QVariant.String),
-    ("item_code", "項目", QVariant.String),
     ("chiiki_bunrui", "地域分類", QVariant.Int),
     ("jouhou_bunrui", "情報分類", QVariant.Int),
     ("element_id", "要素識別番号", QVariant.Int),
@@ -133,6 +136,7 @@ class MergeResult:
     geom_fail_counter: Counter = field(default_factory=Counter)
     errors: list[str] = field(default_factory=list)
     layer_parent_codes: dict[str, str] = field(default_factory=dict)
+    layer_element_types: dict[str, str] = field(default_factory=dict)
 
 
 def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
@@ -168,6 +172,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     geom_fail_counter: Counter = Counter()
     errors: list[str] = []
     layer_parent_codes: dict[str, str] = {}
+    layer_element_types: dict[str, str] = {}
 
     # 衝突するレイヤ名を事前検出
     _name_counts: Counter = Counter()
@@ -261,12 +266,14 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         layer.updateExtents()
         layers.append(layer)
         layer_parent_codes[layer_name] = layer_code[:2]
+        layer_element_types[layer_name] = first_elem.element_type
 
     return MergeResult(
         layers=layers,
         geom_fail_counter=geom_fail_counter,
         errors=errors,
         layer_parent_codes=layer_parent_codes,
+        layer_element_types=layer_element_types,
     )
 
 

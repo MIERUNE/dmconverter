@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from ..constants import COORD_FIELD_WIDTH
 from .classifier import ClassifiedRecords, ElementGroup, ElementRecord
 from .models import (
@@ -17,6 +19,8 @@ from .models import (
     ParsedElement,
     ParsedGroup,
 )
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # ヘルパー関数
@@ -110,9 +114,8 @@ def _extract_common_fields(record: str) -> dict:
     return {
         "element_type": record[0:2],  # A2: レコードタイプ
         "dm_code": record[2:6].strip(),  # I4: 分類コード（レイヤ）
-        "item_code": record[6:8].strip(),  # I2: 分類コード（項目）
-        "chiiki_bunrui": _safe_int(record[8:10]),  # I2: 地域分類
-        "jouhou_bunrui": _safe_int(record[10:12]),  # I2: 情報分類
+        "chiiki_bunrui": _safe_int(record[6:8]),  # I2: 地域分類
+        "jouhou_bunrui": _safe_int(record[8:12]),  # I4: 情報分類
         "element_id": _safe_int(record[12:16]),  # I4: 要素識別番号
         "hierarchy": _safe_int(record[16:18]),  # I2: 階層レベル
         "zukei_kubun": _safe_int(record[18:20]),  # I2: 図形区分
@@ -134,7 +137,6 @@ def _build_parsed_element(fields: dict, **kwargs) -> ParsedElement:
     return ParsedElement(
         element_type=fields["element_type"],
         dm_code=fields["dm_code"],
-        item_code=fields["item_code"],
         chiiki_bunrui=fields["chiiki_bunrui"],
         jouhou_bunrui=fields["jouhou_bunrui"],
         element_id=fields["element_id"],
@@ -182,21 +184,35 @@ def _parse_coords_from_lines(
 def _parse_line_area_element(
     record: str, coord_lines: tuple[str, ...]
 ) -> ParsedElement:
-    """E1-E4（面・線・円・弧）を解析する。座標は後続行から取得。"""
+    """E1-E4（面・線・円・円弧）を解析する。座標は後続行から取得。"""
     fields = _extract_common_fields(record)
     coordinates = _parse_coords_from_lines(fields, coord_lines)
     return _build_parsed_element(fields, coordinates=coordinates)
 
 
-def _parse_point_element(record: str) -> ParsedElement:
-    """E5（点）を解析する。座標はE行自体に埋め込まれている。"""
-    fields = _extract_common_fields(record)
-
+def _extract_embedded_coordinate(record: str, fields: dict) -> tuple[Coordinate, ...]:
+    """E5/E7/E8の埋め込み代表点座標を抽出する（record[35:56]）。"""
     x_val = _safe_int(record[35:42])
     y_val = _safe_int(record[42:49])
     z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
+    return (Coordinate(x=x_val, y=y_val, z=z_val),)
 
-    coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
+
+def _parse_point_element(record: str, warnings: list[str]) -> ParsedElement:
+    """E5（点）を解析する。座標はE行自体に埋め込まれている。"""
+    fields = _extract_common_fields(record)
+
+    # レコード長チェック（座標・属性取得には58bytes必要）
+    if len(record) < 58:
+        msg = (
+            f"E5 {fields['dm_code']} 要素ID={fields['element_id']}: "
+            f"不正なレコード長 {len(record)} bytes（最低58bytes必要）"
+        )
+        logger.warning(msg)
+        warnings.append(msg)
+        return _build_parsed_element(fields, coordinates=())
+
+    coordinates = _extract_embedded_coordinate(record, fields)
 
     attribute_value = _safe_int(record[49:56])
     zokusei_kubun = _safe_int(record[56:58])
@@ -217,21 +233,37 @@ def _parse_direction_element(
 
 
 def _parse_annotation_element(
-    record: str, annotation_lines: tuple[str, ...]
+    record: str, annotation_lines: tuple[str, ...], warnings: list[str]
 ) -> ParsedElement:
     """E7（注記）を解析する。代表点座標はE行、注記データは後続行から取得。"""
     fields = _extract_common_fields(record)
 
+    # レコード長チェック（座標取得には56bytes必要）
+    if len(record) < 56:
+        msg = (
+            f"E7 {fields['dm_code']} 要素ID={fields['element_id']}: "
+            f"不正なレコード長 {len(record)} bytes（最低56bytes必要）"
+        )
+        logger.warning(msg)
+        warnings.append(msg)
+        return _build_parsed_element(fields, coordinates=())
+
     # 代表点座標（E5と同じ位置）
-    x_val = _safe_int(record[35:42])
-    y_val = _safe_int(record[42:49])
-    z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
-    coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
+    coordinates = _extract_embedded_coordinate(record, fields)
 
     # 後続注記レコードの解析
     annotation: AnnotationInfo | None = None
     if annotation_lines:
         first = annotation_lines[0]
+        # 注記メタデータ取得には20bytes必要
+        if len(first) < 20:
+            msg = (
+                f"E7 {fields['dm_code']} 要素ID={fields['element_id']}: "
+                f"不正な注記後続レコード長 {len(first)} bytes（最低20bytes必要）"
+            )
+            logger.warning(msg)
+            warnings.append(msg)
+            return _build_parsed_element(fields, coordinates=coordinates)
         orientation = _safe_int(first[0:1])
         angle = _safe_int(first[1:8])
         size = _safe_int(first[8:13])
@@ -261,16 +293,23 @@ def _parse_annotation_element(
 
 
 def _parse_attribute_element(
-    record: str, attribute_lines: tuple[str, ...]
+    record: str, attribute_lines: tuple[str, ...], warnings: list[str]
 ) -> ParsedElement:
     """E8（属性）を解析する。代表点座標はE行、属性データは後続行から取得。"""
     fields = _extract_common_fields(record)
 
+    # レコード長チェック（座標取得には56bytes必要）
+    if len(record) < 56:
+        msg = (
+            f"E8 {fields['dm_code']} 要素ID={fields['element_id']}: "
+            f"不正なレコード長 {len(record)} bytes（最低56bytes必要）"
+        )
+        logger.warning(msg)
+        warnings.append(msg)
+        return _build_parsed_element(fields, coordinates=())
+
     # 代表点座標（E5と同じ位置）
-    x_val = _safe_int(record[35:42])
-    y_val = _safe_int(record[42:49])
-    z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
-    coordinates = (Coordinate(x=x_val, y=y_val, z=z_val),)
+    coordinates = _extract_embedded_coordinate(record, fields)
 
     # 後続属性レコードの解析（レコード全体が属性データ）
     attribute: AttributeInfo | None = None
@@ -294,7 +333,9 @@ _COORD_LINE_PARSERS = {
 }
 
 
-def _parse_element(elem: ElementRecord, encoding: str) -> ParsedElement:
+def _parse_element(
+    elem: ElementRecord, encoding: str, warnings: list[str]
+) -> ParsedElement:
     """ElementRecordを要素タイプに応じて解析する。"""
     record = elem.record.decode(encoding, errors="replace")
     coord_lines = tuple(
@@ -303,13 +344,13 @@ def _parse_element(elem: ElementRecord, encoding: str) -> ParsedElement:
     element_type = record[1]
 
     if element_type == "5":
-        return _parse_point_element(record)
+        return _parse_point_element(record, warnings)
 
     if element_type == "7":
-        return _parse_annotation_element(record, coord_lines)
+        return _parse_annotation_element(record, coord_lines, warnings)
 
     if element_type == "8":
-        return _parse_attribute_element(record, coord_lines)
+        return _parse_attribute_element(record, coord_lines, warnings)
 
     parser = _COORD_LINE_PARSERS.get(element_type)
     if parser is not None:
@@ -320,11 +361,15 @@ def _parse_element(elem: ElementRecord, encoding: str) -> ParsedElement:
     return _build_parsed_element(fields, coordinates=())
 
 
-def _parse_element_group(group: ElementGroup, encoding: str) -> ParsedGroup:
+def _parse_element_group(
+    group: ElementGroup, encoding: str, warnings: list[str]
+) -> ParsedGroup:
     """ElementGroupを解析する。"""
     header = group.header.decode(encoding, errors="replace")
     dm_code = header[2:6].strip()
-    elements = tuple(_parse_element(elem, encoding) for elem in group.elements)
+    elements = tuple(
+        _parse_element(elem, encoding, warnings) for elem in group.elements
+    )
     return ParsedGroup(dm_code=dm_code, elements=elements)
 
 
@@ -387,10 +432,18 @@ def parse(classified: ClassifiedRecords) -> ParsedDM:
     Returns:
         ParsedDM: 解析済みDMデータ
     """
+    warnings: list[str] = []
+
     enc = classified.encoding
     mesh_info = _parse_mesh_info(classified.mesh_rows, enc)
     map_sheet = _parse_map_sheet(classified.mesh_rows)
     groups = tuple(
-        _parse_element_group(group, enc) for group in classified.element_groups
+        _parse_element_group(group, enc, warnings)
+        for group in classified.element_groups
     )
-    return ParsedDM(mesh_info=mesh_info, map_sheet=map_sheet, groups=groups)
+    return ParsedDM(
+        mesh_info=mesh_info,
+        map_sheet=map_sheet,
+        groups=groups,
+        parse_warnings=tuple(warnings),
+    )
