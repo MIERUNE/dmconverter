@@ -23,7 +23,7 @@ from qgis.core import (
 from .constants import CLASSIFICATIONS, get_classification_name
 from .parser.classifier import classify
 from .parser.parser import parse
-from .parser.reader import read_records
+from .parser.reader import detect_encoding, read_records
 from .writer.log_writer import write_log
 from .writer.style import apply_annotation_labels
 from .writer.writer import create_merged_layers, save_to_geopackage
@@ -143,7 +143,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
         for dm_file in dm_files:
             feedback.pushInfo(f"読み込み中: {dm_file}")
-            classified = classify(read_records(dm_file))
+            classified = classify(read_records(dm_file), detect_encoding(dm_file))
             parsed = parse(classified)
 
             if base_coord_system is None:
