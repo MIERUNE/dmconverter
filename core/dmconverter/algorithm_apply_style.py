@@ -120,7 +120,10 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             if qlr_path:
                 output_qlr = qlr_path
 
-        if input_gpkg and output_qlr:
+        if not input_gpkg:
+            return {}
+
+        if output_qlr:
             specified = self.parameterAsFileOutput(parameters, self.OUTPUT_QLR, context)
             if specified and os.path.exists(output_qlr):
                 os.replace(output_qlr, specified)
