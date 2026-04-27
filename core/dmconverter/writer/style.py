@@ -132,6 +132,11 @@ def build_qml_map(
     Returns:
         {QgsWkbTypes.GeometryType: qml_path} の辞書
     """
+    if not os.path.isdir(style_folder):
+        if feedback is not None:
+            feedback.reportError(f"スタイルフォルダが見つかりません: {style_folder}")
+        return {}
+
     qml_map: dict[QgsWkbTypes.GeometryType, str] = {}
     for fname in os.listdir(style_folder):
         if not fname.lower().endswith(".qml"):
@@ -143,7 +148,14 @@ def build_qml_map(
             if feedback is not None:
                 feedback.reportError(f"QMLの解析に失敗（スキップ）: {fname}")
             continue
-        if geom_type is not None and geom_type not in qml_map:
+        if geom_type is None:
+            if feedback is not None:
+                feedback.pushWarning(
+                    f"{fname}: カテゴリ分類スタイルではないため適用できません"
+                    " — HCODE2フィールドでカテゴリ分類されたQMLを配置してください"
+                )
+            continue
+        if geom_type not in qml_map:
             qml_map[geom_type] = qml_path
     return qml_map
 
