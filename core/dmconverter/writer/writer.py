@@ -89,6 +89,7 @@ def _build_fields() -> QgsFields:
         fields.append(QgsField(field_name, field_type))
         if field_name == "分類コード":
             fields.append(QgsField("分類名", QVariant.String))
+            fields.append(QgsField("HCODE2", QVariant.String))
     return fields
 
 
@@ -249,6 +250,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
                 feat.setAttribute(field_name, getattr(elem, attr_name))
             name = get_classification_name(elem.dm_code)
             feat.setAttribute("分類名", None if name == elem.dm_code else name)
+            feat.setAttribute("HCODE2", elem.dm_code + f"{elem.zukei_kubun:02d}")
 
             # 注記固有フィールドの設定（E7のみ）
             if is_annotation and elem.annotation is not None:

@@ -1,12 +1,18 @@
 """レイヤスタイル設定
 
 レイヤにラベル表示などのスタイルを適用する。
+QMLスタイルの適用とQLRファイルのエクスポートも行う。
 """
 
 from __future__ import annotations
 
+import os
+import xml.etree.ElementTree as ET
+
 from qgis.core import (
     Qgis,
+    QgsLayerDefinition,
+    QgsLayerTreeGroup,
     QgsNullSymbolRenderer,
     QgsPalLayerSettings,
     QgsProperty,
@@ -14,7 +20,15 @@ from qgis.core import (
     QgsUnitTypes,
     QgsVectorLayer,
     QgsVectorLayerSimpleLabeling,
+    QgsWkbTypes,
 )
+
+# QMLのシンボルタイプ → QgsWkbTypes.GeometryType の対応
+_QML_SYMBOL_TO_GEOM_TYPE: dict[str, QgsWkbTypes.GeometryType] = {
+    "marker": QgsWkbTypes.PointGeometry,
+    "line": QgsWkbTypes.LineGeometry,
+    "fill": QgsWkbTypes.PolygonGeometry,
+}
 
 
 def apply_annotation_labels(layer: QgsVectorLayer) -> None:
@@ -104,3 +118,96 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
 
     # 注記の原点（ポイントシンボル）を非表示にする
     layer.setRenderer(QgsNullSymbolRenderer())
+
+
+def build_qml_map(
+    style_folder: str,
+    feedback=None,
+) -> dict[QgsWkbTypes.GeometryType, tuple[str, str]]:
+    """スタイルフォルダ内のQMLを読み込み、ジオメトリタイプ別に索引化して返す。
+
+    QMLのシンボルタイプ（marker/line/fill）を判定し、
+    ジオメトリタイプをキーにしたマップを返す。
+    同一ジオメトリタイプのQMLが複数ある場合は最初に見つかったものを使用する。
+
+    Returns:
+        {QgsWkbTypes.GeometryType: (qml_path, filename)} の辞書
+    """
+    qml_map: dict[QgsWkbTypes.GeometryType, tuple[str, str]] = {}
+    for fname in os.listdir(style_folder):
+        if not fname.lower().endswith(".qml"):
+            continue
+        qml_path = os.path.join(style_folder, fname)
+        try:
+            geom_type = _detect_qml_geom_type(qml_path)
+        except ET.ParseError:
+            if feedback is not None:
+                feedback.reportError(f"QMLの解析に失敗（スキップ）: {fname}")
+            continue
+        if geom_type is not None and geom_type not in qml_map:
+            qml_map[geom_type] = (qml_path, fname)
+    return qml_map
+
+
+def _detect_qml_geom_type(qml_path: str) -> QgsWkbTypes.GeometryType | None:
+    """QMLファイルのシンボルタイプからジオメトリタイプを検出する。
+
+    Raises:
+        ET.ParseError: QMLファイルが不正なXMLの場合
+    """
+    tree = ET.parse(qml_path)
+    root = tree.getroot()
+    renderer = root.find(".//renderer-v2[@type='categorizedSymbol']")
+    if renderer is None:
+        return None
+    symbol = renderer.find(".//symbols/symbol")
+    if symbol is None:
+        return None
+    return _QML_SYMBOL_TO_GEOM_TYPE.get(symbol.get("type", ""))
+
+
+def apply_qml_by_geom_type(
+    layer: QgsVectorLayer,
+    qml_map: dict[QgsWkbTypes.GeometryType, tuple[str, str]],
+    feedback=None,
+) -> bool:
+    """ジオメトリタイプに対応するQMLをレイヤに直接適用する。
+
+    Args:
+        layer: スタイルを適用するレイヤ
+        qml_map: build_qml_map() の戻り値
+        feedback: QgsProcessingFeedback（任意）
+
+    Returns:
+        QMLを適用できた場合はTrue
+    """
+    geom_type = layer.geometryType()
+    if geom_type not in qml_map:
+        return False
+
+    qml_path, fname = qml_map[geom_type]
+    load_msg, load_ok = layer.loadNamedStyle(qml_path)
+
+    if load_ok:
+        layer.triggerRepaint()
+        if feedback is not None:
+            feedback.pushInfo(f"QML適用: {layer.name()} ← {fname}")
+    else:
+        if feedback is not None:
+            feedback.reportError(f"QML読み込み失敗: {layer.name()}: {load_msg}")
+    return load_ok
+
+
+def export_qlr(nodes: list, qlr_path: str) -> str | None:
+    """レイヤをQLRファイルにエクスポートする。
+    Args:
+        nodes: エクスポートするレイヤツリーノードのリスト
+        qlr_path: 出力するQLRファイルのパス
+
+    Returns:
+        成功した場合はNone、失敗した場合はエラーメッセージ
+    """
+    ok = QgsLayerDefinition.exportLayerDefinition(qlr_path, nodes)
+    if not ok:
+        return "QLRエクスポートに失敗しました"
+    return None
