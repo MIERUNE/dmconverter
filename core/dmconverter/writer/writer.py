@@ -187,10 +187,10 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         # (elem, geom) ペアのリストを構築
         elem_geom_pairs: list[tuple[ParsedElement, QgsGeometry]] = []
         if ring_groups:
-            for outer_elem, inner_elems, outer_ms in ring_groups:
+            for outer_elem, outer_ms, inner_elems in ring_groups:
                 try:
                     geom = (
-                        to_ring_polygon_geometry(outer_elem, inner_elems, outer_ms)
+                        to_ring_polygon_geometry(outer_elem, outer_ms, inner_elems)
                         if inner_elems
                         else geom_func(outer_elem, outer_ms)
                     )
