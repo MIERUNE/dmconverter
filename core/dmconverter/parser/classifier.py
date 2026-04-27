@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from typing import Iterator
 
 from ..constants import (
+    COURSE_COUNT_POSITION,
     MESH_BASE_ROWS,
-    MESH_HISTORY_SET_ROWS,
     REVISION_COUNT_POSITION,
 )
 
@@ -95,12 +95,65 @@ def _get_revision_count(mesh_row_a: bytes) -> int:
     return int(raw)
 
 
-def _calc_mesh_row_count(revision_count: int) -> int:
-    """Mレコード全体の行数を計算する。
+def _get_course_count(mesh_row_d: bytes) -> int:
+    """図郭レコード(d)から撮影コース数を取得する。
 
-    (a)(b)(c)の3行 + (d)(e)(f)×(修正回数+1)
+    位置9（0始点、I1）に格納されている。
     """
-    return MESH_BASE_ROWS + MESH_HISTORY_SET_ROWS * (revision_count + 1)
+    pos = COURSE_COUNT_POSITION
+    if len(mesh_row_d) <= pos:
+        return 0
+    raw = mesh_row_d[pos : pos + 1].strip()
+    if not raw or not raw.isdigit():
+        return 0
+    return int(raw)
+
+
+def _collect_mesh_rows(record_list: list[bytes]) -> tuple[bytes, ...]:
+    """Mレコードを動的に収集する（course_count対応）。
+
+    (a)(b)(c)の固定3行に続き、(d)(e)(f)セットを修正回数+1回繰り返す。
+    (f)レコードの行数は(d)行の撮影コース数で決まる。
+
+    Raises:
+        ValueError: Mレコードの行数が不足している場合
+    """
+    revision_count = _get_revision_count(record_list[0])
+
+    rows = list(record_list[:MESH_BASE_ROWS])  # (a)(b)(c)
+    pos = MESH_BASE_ROWS
+
+    for i in range(revision_count + 1):
+        # (d)行
+        if pos >= len(record_list):
+            raise ValueError(
+                f"Mレコードが不足しています（(d)行が必要、セット{i + 1}/{revision_count + 1}）"
+            )
+        d_row = record_list[pos]
+        rows.append(d_row)
+        pos += 1
+
+        course_count = _get_course_count(d_row)
+
+        # (e)行
+        if pos >= len(record_list):
+            raise ValueError(
+                f"Mレコードが不足しています（(e)行が必要、セット{i + 1}/{revision_count + 1}）"
+            )
+        rows.append(record_list[pos])
+        pos += 1
+
+        # (f)行 × course_count
+        for j in range(course_count):
+            if pos >= len(record_list):
+                raise ValueError(
+                    f"Mレコードが不足しています"
+                    f"（(f)行{j + 1}/{course_count}が必要、セット{i + 1}/{revision_count + 1}）"
+                )
+            rows.append(record_list[pos])
+            pos += 1
+
+    return tuple(rows)
 
 
 def classify(records: Iterator[bytes], encoding: str = "cp932") -> ClassifiedRecords:
@@ -124,17 +177,8 @@ def classify(records: Iterator[bytes], encoding: str = "cp932") -> ClassifiedRec
             f"Mレコードが{MESH_BASE_ROWS}行未満です（{len(record_list)}行）"
         )
 
-    revision_count = _get_revision_count(record_list[0])
-    mesh_row_count = _calc_mesh_row_count(revision_count)
-
-    if len(record_list) < mesh_row_count:
-        raise ValueError(
-            f"Mレコードが不足しています（修正回数{revision_count}→"
-            f"必要{mesh_row_count}行、実際{len(record_list)}行）"
-        )
-
-    mesh_rows = tuple(record_list[:mesh_row_count])
-    pos = mesh_row_count
+    mesh_rows = _collect_mesh_rows(record_list)
+    pos = len(mesh_rows)
 
     # --- Phase 2: 要素グループ（H + E + 座標行） ---
     element_groups: list[ElementGroup] = []
