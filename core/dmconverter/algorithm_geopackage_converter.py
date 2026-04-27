@@ -8,6 +8,8 @@ import glob
 import os
 from collections import Counter
 
+from qgis.PyQt.QtWidgets import QApplication
+
 from qgis.core import (
     QgsCoordinateTransform,
     QgsLayerTreeGroup,
@@ -208,7 +210,9 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self._layer_names = [layer.name() for layer in layers]
         self._layer_parent_codes = merge_result.layer_parent_codes
         self._layer_element_types = merge_result.layer_element_types
-        self._style_folder = self.parameterAsFile(parameters, self.STYLE_FOLDER, context)
+        self._style_folder = self.parameterAsFile(
+            parameters, self.STYLE_FOLDER, context
+        )
 
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加します")
 
@@ -294,6 +298,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                     combined_extent.combineExtentWith(layer_extent)
 
             feedback.setProgress(70 + int(30 * (idx + 1) / total_layers))
+            QApplication.processEvents()
 
         # ズーム処理
         if iface is None or combined_extent.isEmpty() or layer_crs is None:

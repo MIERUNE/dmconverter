@@ -93,9 +93,13 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
 
         qml_map = build_qml_map(style_folder, feedback)
         if not qml_map:
-            feedback.reportError("スタイルフォルダ内に有効なQMLファイルが見つかりません")
+            feedback.reportError(
+                "スタイルフォルダ内に有効なQMLファイルが見つかりません"
+            )
             return {}
-        feedback.pushInfo(f"QMLマップ構築完了: {len(qml_map)}種のジオメトリタイプに対応")
+        feedback.pushInfo(
+            f"QMLマップ構築完了: {len(qml_map)}種のジオメトリタイプに対応"
+        )
 
         if input_gpkg:
             gpkg_files = [input_gpkg]
