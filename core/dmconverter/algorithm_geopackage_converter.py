@@ -8,7 +8,7 @@ import glob
 import os
 from collections import Counter
 
-from qgis.PyQt.QtWidgets import QApplication
+from qgis.PyQt.QtCore import QCoreApplication
 
 from qgis.core import (
     QgsCoordinateTransform,

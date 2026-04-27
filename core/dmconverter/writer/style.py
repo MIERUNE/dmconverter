@@ -138,7 +138,7 @@ def build_qml_map(
         return {}
 
     qml_map: dict[QgsWkbTypes.GeometryType, str] = {}
-    for fname in os.listdir(style_folder):
+    for fname in sorted(os.listdir(style_folder)):
         if not fname.lower().endswith(".qml"):
             continue
         qml_path = os.path.join(style_folder, fname)
