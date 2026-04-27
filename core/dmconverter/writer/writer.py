@@ -23,69 +23,20 @@ from qgis.PyQt.QtCore import QVariant
 
 from ..constants import CLASSIFICATIONS, get_classification_name
 from ..parser.models import MapSheetInfo, ParsedDM, ParsedElement
-from .crs import get_epsg
-from .geometry import (
-    direction_angle,
-    to_arc_geometry,
-    to_circle_geometry,
-    to_line_geometry,
-    to_point_geometry,
-    to_polygon_geometry,
+from ..schema import (
+    ANNOTATION_FIELD_DEFS,
+    DIRECTION_FIELD_DEFS,
+    ELEMENT_TYPE_MAP,
+    FIELD_DEFS,
 )
-
-# 要素タイプ → (ジオメトリタイプ名, WKBタイプ, ジオメトリ変換関数)
-_ELEMENT_TYPE_MAP = {
-    "E1": ("面", QgsWkbTypes.Polygon, to_polygon_geometry),
-    "E2": ("線", QgsWkbTypes.LineString, to_line_geometry),
-    "E3": ("円", QgsWkbTypes.Polygon, to_circle_geometry),
-    "E4": ("円弧", QgsWkbTypes.LineString, to_arc_geometry),
-    "E5": ("点", QgsWkbTypes.Point, to_point_geometry),
-    "E6": ("方向", QgsWkbTypes.Point, to_point_geometry),
-    "E7": ("注記", QgsWkbTypes.Point, to_point_geometry),
-}
-
-
-# ParsedElement属性名 → GeoPackageフィールド名（DM仕様書の正式名称）
-_FIELD_DEFS: list[tuple[str, str, QVariant.Type]] = [
-    ("element_type", "レコードタイプ", QVariant.String),
-    ("dm_code", "分類コード", QVariant.String),
-    ("chiiki_bunrui", "地域分類", QVariant.Int),
-    ("jouhou_bunrui", "情報分類", QVariant.Int),
-    ("element_id", "要素識別番号", QVariant.Int),
-    ("hierarchy", "階層レベル", QVariant.Int),
-    ("zukei_kubun", "図形区分", QVariant.Int),
-    ("data_kubun", "実データ区分", QVariant.Int),
-    ("seido_kubun", "精度区分", QVariant.Int),
-    ("chuki_kubun", "注記区分", QVariant.Int),
-    ("teni", "転位区分", QVariant.Int),
-    ("kandan", "間断区分", QVariant.Int),
-    ("attribute_value", "属性数値", QVariant.Int),
-    ("zokusei_kubun", "属性区分", QVariant.Int),
-    ("acquired_date", "取得年月", QVariant.String),
-    ("updated_date", "更新取得年月", QVariant.String),
-    ("deleted_date", "消去年月", QVariant.String),
-]
-
-# 注記固有フィールド（E7のみ）
-_ANNOTATION_FIELD_DEFS: list[tuple[str, str, QVariant.Type]] = [
-    ("text", "注記内容", QVariant.String),
-    ("orientation", "縦横区分", QVariant.Int),
-    ("size", "字の大きさ", QVariant.Int),
-    ("spacing", "字隔", QVariant.Int),
-    ("angle", "文字列の方向", QVariant.Int),
-    ("line_weight", "線号", QVariant.Int),
-]
-
-# 方向固有フィールド（E6のみ）
-_DIRECTION_FIELD_DEFS: list[tuple[str, QVariant.Type]] = [
-    ("方向角", QVariant.Double),
-]
+from .crs import get_epsg
+from .geometry import direction_angle
 
 
 def _build_fields() -> QgsFields:
     """レイヤの属性フィールドを定義する。"""
     fields = QgsFields()
-    for _, field_name, field_type in _FIELD_DEFS:
+    for _, field_name, field_type in FIELD_DEFS:
         fields.append(QgsField(field_name, field_type))
         if field_name == "分類コード":
             fields.append(QgsField("分類名", QVariant.String))
@@ -96,7 +47,7 @@ def _build_fields() -> QgsFields:
 def _build_annotation_fields() -> QgsFields:
     """注記レイヤの属性フィールドを定義する（共通 + 注記固有）。"""
     fields = _build_fields()
-    for _, field_name, field_type in _ANNOTATION_FIELD_DEFS:
+    for _, field_name, field_type in ANNOTATION_FIELD_DEFS:
         fields.append(QgsField(field_name, field_type))
     return fields
 
@@ -104,7 +55,7 @@ def _build_annotation_fields() -> QgsFields:
 def _build_direction_fields() -> QgsFields:
     """方向レイヤの属性フィールドを定義する（共通 + 方向固有）。"""
     fields = _build_fields()
-    for field_name, field_type in _DIRECTION_FIELD_DEFS:
+    for field_name, field_type in DIRECTION_FIELD_DEFS:
         fields.append(QgsField(field_name, field_type))
     return fields
 
@@ -162,7 +113,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     for dm in dm_list:
         for group in dm.groups:
             for elem in group.elements:
-                type_info = _ELEMENT_TYPE_MAP.get(elem.element_type)
+                type_info = ELEMENT_TYPE_MAP.get(elem.element_type)
                 if type_info is None:
                     continue
                 geom_type_name = type_info[0]
@@ -184,7 +135,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
 
     for (layer_code, geom_type_name), elem_pairs in groups.items():
         first_elem = elem_pairs[0][0]
-        type_info = _ELEMENT_TYPE_MAP[first_elem.element_type]
+        type_info = ELEMENT_TYPE_MAP[first_elem.element_type]
         wkb_type = type_info[1]
         geom_func = type_info[2]
 
@@ -246,7 +197,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
                 continue
             feat = QgsFeature(layer.fields())
             feat.setGeometry(geom)
-            for attr_name, field_name, _ in _FIELD_DEFS:
+            for attr_name, field_name, _ in FIELD_DEFS:
                 feat.setAttribute(field_name, getattr(elem, attr_name))
             name = get_classification_name(elem.dm_code)
             feat.setAttribute("分類名", None if name == elem.dm_code else name)
@@ -254,12 +205,12 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
 
             # 注記固有フィールドの設定（E7のみ）
             if is_annotation and elem.annotation is not None:
-                for attr_name, field_name, _ in _ANNOTATION_FIELD_DEFS:
+                for attr_name, field_name, _ in ANNOTATION_FIELD_DEFS:
                     feat.setAttribute(field_name, getattr(elem.annotation, attr_name))
 
             # 方向固有フィールドの設定（E6のみ）
             if is_direction:
-                for field_name, _ in _DIRECTION_FIELD_DEFS:
+                for field_name, _ in DIRECTION_FIELD_DEFS:
                     feat.setAttribute(field_name, direction_angle(elem))
 
             features.append(feat)
