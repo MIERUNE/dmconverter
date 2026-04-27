@@ -159,7 +159,9 @@ class TestToRingPolygonGeometry(unittest.TestCase):
             origin_x=0, origin_y=100, upper_x=200, upper_y=200, coord_unit=999
         )
         outer = _make_element(0, _OUTER_COORDS)
-        inner = _make_element(31, [(10, -90), (20, -90), (20, -80), (10, -80), (10, -90)])
+        inner = _make_element(
+            31, [(10, -90), (20, -90), (20, -80), (10, -80), (10, -90)]
+        )
         geom = to_ring_polygon_geometry(outer, _MS, [(inner, inner_ms)])
         self.assertFalse(geom.isEmpty())
         rings = geom.asPolygon()

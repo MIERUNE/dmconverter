@@ -195,14 +195,18 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
                         else geom_func(outer_elem, outer_ms)
                     )
                 except Exception as e:
-                    geom_fail_counter[(outer_elem.element_type, outer_elem.dm_code)] += 1
+                    geom_fail_counter[
+                        (outer_elem.element_type, outer_elem.dm_code)
+                    ] += 1
                     errors.append(
                         f"{outer_elem.element_type} {outer_elem.dm_code} "
                         f"要素ID={outer_elem.element_id}: {e}"
                     )
                     continue
                 if geom is None or geom.isEmpty():
-                    geom_fail_counter[(outer_elem.element_type, outer_elem.dm_code)] += 1
+                    geom_fail_counter[
+                        (outer_elem.element_type, outer_elem.dm_code)
+                    ] += 1
                     continue
                 elem_geom_pairs.append((outer_elem, geom))
         else:

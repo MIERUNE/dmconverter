@@ -98,7 +98,9 @@ def group_ring_polygons(
             for idx, (_, _, ig) in enumerate(inner_geoms)
             if not ig.isEmpty() and outer_geom.contains(ig)
         ]
-        matched_inners = [(inner_geoms[i][0], inner_geoms[i][1]) for i in matched_indices]
+        matched_inners = [
+            (inner_geoms[i][0], inner_geoms[i][1]) for i in matched_indices
+        ]
         used_indices.update(matched_indices)
         result.append((outer_elem, outer_ms, matched_inners))
 
