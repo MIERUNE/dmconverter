@@ -123,7 +123,7 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
 def build_qml_map(
     style_folder: str,
     feedback=None,
-) -> dict[QgsWkbTypes.GeometryType, tuple[str, str]]:
+) -> dict[QgsWkbTypes.GeometryType, str]:
     """スタイルフォルダ内のQMLを読み込み、ジオメトリタイプ別に索引化して返す。
 
     QMLのシンボルタイプ（marker/line/fill）を判定し、
@@ -131,9 +131,9 @@ def build_qml_map(
     同一ジオメトリタイプのQMLが複数ある場合は最初に見つかったものを使用する。
 
     Returns:
-        {QgsWkbTypes.GeometryType: (qml_path, filename)} の辞書
+        {QgsWkbTypes.GeometryType: qml_path} の辞書
     """
-    qml_map: dict[QgsWkbTypes.GeometryType, tuple[str, str]] = {}
+    qml_map: dict[QgsWkbTypes.GeometryType, str] = {}
     for fname in os.listdir(style_folder):
         if not fname.lower().endswith(".qml"):
             continue
@@ -145,7 +145,7 @@ def build_qml_map(
                 feedback.reportError(f"QMLの解析に失敗（スキップ）: {fname}")
             continue
         if geom_type is not None and geom_type not in qml_map:
-            qml_map[geom_type] = (qml_path, fname)
+            qml_map[geom_type] = qml_path
     return qml_map
 
 
@@ -168,7 +168,7 @@ def _detect_qml_geom_type(qml_path: str) -> QgsWkbTypes.GeometryType | None:
 
 def apply_qml_by_geom_type(
     layer: QgsVectorLayer,
-    qml_map: dict[QgsWkbTypes.GeometryType, tuple[str, str]],
+    qml_map: dict[QgsWkbTypes.GeometryType, str],
     feedback=None,
 ) -> bool:
     """ジオメトリタイプに対応するQMLをレイヤに直接適用する。
@@ -185,13 +185,11 @@ def apply_qml_by_geom_type(
     if geom_type not in qml_map:
         return False
 
-    qml_path, fname = qml_map[geom_type]
+    qml_path = qml_map[geom_type]
     load_msg, load_ok = layer.loadNamedStyle(qml_path)
 
     if load_ok:
         layer.triggerRepaint()
-        if feedback is not None:
-            feedback.pushInfo(f"QML適用: {layer.name()} ← {fname}")
     else:
         if feedback is not None:
             feedback.reportError(f"QML読み込み失敗: {layer.name()}: {load_msg}")
