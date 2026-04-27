@@ -12,7 +12,6 @@ import xml.etree.ElementTree as ET
 from qgis.core import (
     Qgis,
     QgsLayerDefinition,
-    QgsLayerTreeGroup,
     QgsNullSymbolRenderer,
     QgsPalLayerSettings,
     QgsProperty,
