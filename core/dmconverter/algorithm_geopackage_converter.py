@@ -26,7 +26,7 @@ from qgis.core import (
 from .constants import CLASSIFICATIONS, get_classification_name
 from .parser.classifier import classify
 from .parser.parser import parse
-from .parser.reader import read_records
+from .parser.reader import detect_encoding, read_records
 from .writer.log_writer import write_log
 from .writer.style import apply_annotation_labels, apply_qml_by_geom_type, build_qml_map
 from .writer.writer import create_merged_layers, save_to_geopackage
@@ -156,8 +156,16 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
         for i, dm_file in enumerate(dm_files):
             feedback.pushInfo(f"読み込み中: {dm_file}")
-            classified = classify(read_records(dm_file))
-            parsed = parse(classified)
+            try:
+                classified = classify(read_records(dm_file), detect_encoding(dm_file))
+                parsed = parse(classified)
+            except ValueError as exc:
+                skipped_files.append(os.path.basename(dm_file))
+                feedback.reportError(
+                    f"読み込みに失敗したためスキップ: "
+                    f"{os.path.basename(dm_file)} ({exc})"
+                )
+                continue
 
             if base_coord_system is None:
                 base_coord_system = parsed.mesh_info.coordinate_system
