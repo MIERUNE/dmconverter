@@ -143,8 +143,16 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
 
         for dm_file in dm_files:
             feedback.pushInfo(f"読み込み中: {dm_file}")
-            classified = classify(read_records(dm_file), detect_encoding(dm_file))
-            parsed = parse(classified)
+            try:
+                classified = classify(read_records(dm_file), detect_encoding(dm_file))
+                parsed = parse(classified)
+            except ValueError as exc:
+                skipped_files.append(os.path.basename(dm_file))
+                feedback.reportError(
+                    f"読み込みに失敗したためスキップ: "
+                    f"{os.path.basename(dm_file)} ({exc})"
+                )
+                continue
 
             if base_coord_system is None:
                 base_coord_system = parsed.mesh_info.coordinate_system
