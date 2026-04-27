@@ -8,6 +8,8 @@ import glob
 import os
 from collections import Counter
 
+from qgis.PyQt.QtCore import QCoreApplication
+
 from qgis.core import (
     QgsCoordinateTransform,
     QgsLayerTreeGroup,
@@ -26,7 +28,7 @@ from .parser.classifier import classify
 from .parser.parser import parse
 from .parser.reader import read_records
 from .writer.log_writer import write_log
-from .writer.style import apply_annotation_labels
+from .writer.style import apply_annotation_labels, apply_qml_by_geom_type, build_qml_map
 from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
@@ -152,7 +154,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         base_scale = None
         skipped_files = []
 
-        for dm_file in dm_files:
+        for i, dm_file in enumerate(dm_files):
             feedback.pushInfo(f"読み込み中: {dm_file}")
             classified = classify(read_records(dm_file))
             parsed = parse(classified)
@@ -187,6 +189,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 f"座標系{parsed.mesh_info.coordinate_system}"
             )
             parsed_list.append(parsed)
+            feedback.setProgress(int(50 * (i + 1) / len(dm_files)))
 
         if not parsed_list:
             feedback.reportError("変換可能なDMファイルがありません")
@@ -199,6 +202,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError("変換対象の要素がありません")
             return {self.OUTPUT: output_path}
         feedback.pushInfo(f"レイヤ作成完了: {len(layers)}レイヤ")
+        feedback.setProgress(60)
 
         if merge_result.errors:
             for err in merge_result.errors:
@@ -210,12 +214,16 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError(f"GeoPackage書き出し失敗: {err}")
             return {self.OUTPUT: output_path}
         feedback.pushInfo(f"GeoPackage出力完了: {output_path}")
+        feedback.setProgress(70)
 
         # パスとレイヤ名を保存
         self._output_path = output_path
         self._layer_names = [layer.name() for layer in layers]
         self._layer_parent_codes = merge_result.layer_parent_codes
         self._layer_element_types = merge_result.layer_element_types
+        self._style_folder = self.parameterAsFile(
+            parameters, self.STYLE_FOLDER, context
+        )
         group_name = self.parameterAsString(
             parameters, self.GROUP_NAME, context
         ).strip()
@@ -269,7 +277,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         )
         sub_groups: dict[str, QgsLayerTreeGroup] = {}
 
-        for name in self._layer_names:
+        style_folder = getattr(self, "_style_folder", "")
+        qml_map = build_qml_map(style_folder, feedback) if style_folder else {}
+
+        total_layers = len(self._layer_names)
+        for idx, name in enumerate(self._layer_names):
             uri = f"{self._output_path}|layername={name}"
             gpkg_layer = QgsVectorLayer(uri, name, "ogr")
 
@@ -287,9 +299,15 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             project.addMapLayer(gpkg_layer, False)
             sub_groups[group_name].addLayer(gpkg_layer)
 
+            is_annotation = self._layer_element_types.get(name) == "E7"
+
             # E7注記レイヤにラベル設定を適用
-            if self._layer_element_types.get(name) == "E7":
+            if is_annotation:
                 apply_annotation_labels(gpkg_layer)
+
+            # E7以外にQMLスタイルを適用
+            if qml_map and not is_annotation:
+                apply_qml_by_geom_type(gpkg_layer, qml_map, feedback)
 
             layer_crs = gpkg_layer.crs()
 
@@ -299,6 +317,9 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                     combined_extent = QgsRectangle(layer_extent)
                 else:
                     combined_extent.combineExtentWith(layer_extent)
+
+            feedback.setProgress(70 + int(30 * (idx + 1) / total_layers))
+            QCoreApplication.processEvents()
 
         # ズーム処理
         if iface is None or combined_extent.isEmpty() or layer_crs is None:
