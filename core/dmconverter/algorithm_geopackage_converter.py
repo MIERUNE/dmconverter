@@ -8,6 +8,7 @@ import glob
 import os
 from collections import Counter
 
+
 from qgis.PyQt.QtCore import QCoreApplication
 
 from qgis.core import (
@@ -28,7 +29,7 @@ from .parser.classifier import classify
 from .parser.parser import parse
 from .parser.reader import detect_encoding, read_records
 from .writer.log_writer import write_log
-from .writer.style import apply_annotation_labels, apply_qml_by_geom_type, build_qml_map
+from .writer.style import apply_annotation_labels, apply_qml_by_geom_type, build_qml_map, build_renderer_cache
 from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
@@ -286,7 +287,10 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         sub_groups: dict[str, QgsLayerTreeGroup] = {}
 
         style_folder = getattr(self, "_style_folder", "")
-        qml_map = build_qml_map(style_folder, feedback) if style_folder else {}
+        renderer_cache = {}
+        if style_folder:
+            qml_map = build_qml_map(style_folder, feedback)
+            renderer_cache = build_renderer_cache(qml_map, feedback)
 
         total_layers = len(self._layer_names)
         for idx, name in enumerate(self._layer_names):
@@ -314,8 +318,8 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 apply_annotation_labels(gpkg_layer)
 
             # E7以外にQMLスタイルを適用
-            if qml_map and not is_annotation:
-                apply_qml_by_geom_type(gpkg_layer, qml_map, feedback)
+            if renderer_cache and not is_annotation:
+                apply_qml_by_geom_type(gpkg_layer, renderer_cache)
 
             layer_crs = gpkg_layer.crs()
 
@@ -327,7 +331,8 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                     combined_extent.combineExtentWith(layer_extent)
 
             feedback.setProgress(70 + int(30 * (idx + 1) / total_layers))
-            QCoreApplication.processEvents()
+            if idx % 10 == 0:
+                QCoreApplication.processEvents()
 
         # ズーム処理
         if iface is None or combined_extent.isEmpty() or layer_crs is None:
