@@ -46,6 +46,67 @@ def to_polygon_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsG
     return QgsGeometry.fromPolygonXY([points])
 
 
+def to_ring_polygon_geometry(
+    outer: ParsedElement,
+    inner_rings: list[ParsedElement],
+    map_sheet: MapSheetInfo,
+) -> QgsGeometry:
+    """E1外輪要素と内輪要素リスト（中庭線）からリングポリゴンを生成する。
+
+    外輪リング + 内輪リング（複数可）を fromPolygonXY に渡す。
+    """
+    rings = [[_to_abs_point(c, map_sheet) for c in outer.coordinates]]
+    for inner in inner_rings:
+        rings.append([_to_abs_point(c, map_sheet) for c in inner.coordinates])
+    return QgsGeometry.fromPolygonXY(rings)
+
+
+def group_ring_polygons(
+    elem_pairs: list[tuple[ParsedElement, MapSheetInfo]],
+) -> list[tuple[ParsedElement, list[ParsedElement], MapSheetInfo]]:
+    """面要素リストを (外輪要素, 内輪要素リスト, map_sheet) にグループ化する。
+
+    内輪（中庭線, zukei_kubun=31）と外輪を空間包含で対応付ける。
+    内輪が存在しない場合は空リストを返す（呼び出し元で通常処理にフォールバック）。
+    外輪に収まらなかった内輪は (inner_elem, [], map_sheet) として返す（単独ポリゴン扱い）。
+    """
+    inner_pairs = [(e, ms) for e, ms in elem_pairs if e.zukei_kubun == 31]
+    if not inner_pairs:
+        return []
+
+    outer_pairs = [(e, ms) for e, ms in elem_pairs if e.zukei_kubun != 31]
+
+    # 内輪のジオメトリを生成（空間包含判定用）
+    inner_geoms: list[tuple[ParsedElement, MapSheetInfo, QgsGeometry]] = []
+    for e, ms in inner_pairs:
+        if not e.coordinates:
+            continue
+        inner_geoms.append((e, ms, to_polygon_geometry(e, ms)))
+
+    result: list[tuple[ParsedElement, list[ParsedElement], MapSheetInfo]] = []
+    used_indices: set[int] = set()
+
+    for outer_elem, outer_ms in outer_pairs:
+        if not outer_elem.coordinates:
+            continue
+        outer_geom = to_polygon_geometry(outer_elem, outer_ms)
+        matched_indices = [
+            idx
+            for idx, (_, _, ig) in enumerate(inner_geoms)
+            if not ig.isEmpty() and outer_geom.contains(ig)
+        ]
+        matched_inners = [inner_geoms[i][0] for i in matched_indices]
+        used_indices.update(matched_indices)
+        result.append((outer_elem, matched_inners, outer_ms))
+
+    # 外輪に収まらなかった内輪は単独ポリゴンとして出力
+    for idx, (inner_elem, inner_ms, _) in enumerate(inner_geoms):
+        if idx not in used_indices:
+            result.append((inner_elem, [], inner_ms))
+
+    return result
+
+
 def to_circle_geometry(element: ParsedElement, map_sheet: MapSheetInfo) -> QgsGeometry:
     """E3要素（円）からPolygon geometryを生成する。
 
