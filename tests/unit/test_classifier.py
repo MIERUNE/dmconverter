@@ -155,7 +155,7 @@ class TestClassify(unittest.TestCase):
             classify(iter(_SAMPLE_RECORDS[:2]))
 
     def test_mesh_rows_count(self):
-        """Mレコード行数が修正回数に基づいて正しく収集される"""
+        """Mレコード行数がcourse_countによる可変長として正しく収集される"""
         result = classify(iter(_SAMPLE_RECORDS))
         expected_mesh_rows = _collect_mesh_rows(_SAMPLE_RECORDS)
         self.assertEqual(len(result.mesh_rows), len(expected_mesh_rows))

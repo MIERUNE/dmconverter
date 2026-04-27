@@ -114,16 +114,21 @@ def _collect_mesh_rows(record_list: list[bytes]) -> tuple[bytes, ...]:
 
     (a)(b)(c)の固定3行に続き、(d)(e)(f)セットを修正回数+1回繰り返す。
     (f)レコードの行数は(d)行の撮影コース数で決まる。
+
+    Raises:
+        ValueError: Mレコードの行数が不足している場合
     """
     revision_count = _get_revision_count(record_list[0])
 
     rows = list(record_list[:MESH_BASE_ROWS])  # (a)(b)(c)
     pos = MESH_BASE_ROWS
 
-    for _ in range(revision_count + 1):
-        if pos >= len(record_list):
-            break
+    for i in range(revision_count + 1):
         # (d)行
+        if pos >= len(record_list):
+            raise ValueError(
+                f"Mレコードが不足しています（(d)行が必要、セット{i + 1}/{revision_count + 1}）"
+            )
         d_row = record_list[pos]
         rows.append(d_row)
         pos += 1
@@ -132,14 +137,19 @@ def _collect_mesh_rows(record_list: list[bytes]) -> tuple[bytes, ...]:
 
         # (e)行
         if pos >= len(record_list):
-            break
+            raise ValueError(
+                f"Mレコードが不足しています（(e)行が必要、セット{i + 1}/{revision_count + 1}）"
+            )
         rows.append(record_list[pos])
         pos += 1
 
         # (f)行 × course_count
-        for _ in range(course_count):
+        for j in range(course_count):
             if pos >= len(record_list):
-                break
+                raise ValueError(
+                    f"Mレコードが不足しています"
+                    f"（(f)行{j + 1}/{course_count}が必要、セット{i + 1}/{revision_count + 1}）"
+                )
             rows.append(record_list[pos])
             pos += 1
 
