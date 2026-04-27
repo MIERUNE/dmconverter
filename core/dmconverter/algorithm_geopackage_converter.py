@@ -17,6 +17,7 @@ from qgis.core import (
     QgsProcessingParameterBoolean,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
+    QgsProcessingParameterString,
     QgsProject,
     QgsRectangle,
     QgsVectorLayer,
@@ -40,6 +41,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     OUTPUT = "OUTPUT"
     OUTPUT_LOG = "OUTPUT_LOG"
     STYLE_FOLDER = "STYLE_FOLDER"
+    GROUP_NAME = "GROUP_NAME"
 
     def name(self):
         """アルゴリズムの内部ID"""
@@ -97,6 +99,15 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 "入力：スタイルフォルダ（QML）",
                 behavior=QgsProcessingParameterFile.Folder,
                 optional=True,
+            )
+        )
+
+        # オプション: グループ名
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.GROUP_NAME,
+                "グループ名",
+                defaultValue="DM",
             )
         )
 
@@ -213,6 +224,10 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self._style_folder = self.parameterAsFile(
             parameters, self.STYLE_FOLDER, context
         )
+        group_name = self.parameterAsString(
+            parameters, self.GROUP_NAME, context
+        ).strip()
+        self._group_name = group_name if group_name else "DM"
 
         feedback.pushInfo(f"{len(layers)}レイヤをプロジェクトに追加します")
 
@@ -245,7 +260,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         """レイヤをプロジェクトに追加し、マップキャンバスを全体表示にズームする。"""
         from qgis.utils import iface
 
-        if not hasattr(self, "_output_path") or not hasattr(self, "_layer_names"):
+        if (
+            not hasattr(self, "_output_path")
+            or not hasattr(self, "_layer_names")
+            or not hasattr(self, "_group_name")
+        ):
             return {}
 
         project = QgsProject.instance()
@@ -253,7 +272,9 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         layer_crs = None
 
         root = project.layerTreeRoot()
-        dm_group = root.findGroup("DM") or root.insertGroup(0, "DM")
+        dm_group = root.findGroup(self._group_name) or root.insertGroup(
+            0, self._group_name
+        )
         sub_groups: dict[str, QgsLayerTreeGroup] = {}
 
         style_folder = getattr(self, "_style_folder", "")
