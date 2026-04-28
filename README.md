@@ -19,6 +19,18 @@
 - E7 注記レイヤへのラベル表示を自動設定
 - 変換ログをテキストファイルに出力（オプション）
 
+### QML スタイルファイル
+
+スタイル適用アルゴリズムでは、外部の QML ファイルをジオメトリタイプ（点・線・面）ごとに1つずつ用意して使用します。
+
+QML ファイルの要件：
+
+- **レンダラー**: `categorizedSymbol`（カテゴリ分け）
+- **分類フィールド**: `HCODE2`（分類コード4桁 + 図形区分の文字列）
+- **カテゴリ値**: `HCODE2` の値に対してシンボルを割り当て
+
+QGIS 上でスタイルを作成・調整し、レイヤプロパティから `.qml` としてエクスポートしたものを使用してください。
+
 ### 対応要素タイプ
 
 | タイプ | 内容 | ジオメトリ |
@@ -112,38 +124,19 @@ uv sync
 
 ```
 dmconverter/
-├── __init__.py                             # プラグインエントリーポイント
-├── metadata.txt                            # プラグインのメタデータ（名前、バージョンなど）
-├── pyproject.toml                          # プロジェクト設定・依存関係管理（uv 用）
-│
-├── core/dmconverter/                       # プラグイン本体
-│   ├── plugin.py                           # QGISプラグインメインクラス
-│   ├── provider.py                         # Processing Toolbox プロバイダー
-│   ├── algorithm_geopackage_converter.py   # DMからGeoPackageへの変換アルゴリズム
-│   ├── algorithm_apply_style.py            # スタイル適用アルゴリズム
-│   ├── constants.py                        # 定数・分類コード表
-│   ├── schema.py                           # GeoPackage スキーマ定義
-│   │
-│   ├── parser/                             # DMファイル解析モジュール
-│   │   ├── reader.py                       # バイナリ読み込み・エンコーディング判定
-│   │   ├── classifier.py                   # レコード分類・仕分け
-│   │   ├── parser.py                       # レコード解釈・データ構造化
-│   │   └── models.py                       # パーサーのデータモデル定義
-│   │
-│   └── writer/                             # GeoPackage 生成モジュール
-│       ├── writer.py                       # レイヤ作成・GeoPackage 書き出し
-│       ├── geometry.py                     # 座標変換・ジオメトリ生成
-│       ├── crs.py                          # 座標参照系マッピング
-│       ├── style.py                        # レイヤスタイル・ラベル設定
-│       └── log_writer.py                   # 変換ログ出力
-│
-├── imgs/
-│   └── icon.png                            # プラグインアイコン
-│
-└── tests/                                  # テスト
-    ├── unit/                               # ユニットテスト
-    ├── test_metadata.py
-    └── qgis_interface.py                   # テスト用 QGIS インターフェースモック
+├── core/dmconverter/                 # プラグイン本体
+│   ├── plugin.py                     # QGISプラグインメインクラス
+│   ├── provider.py                   # Processing Toolbox プロバイダー
+│   ├── algorithm_geopackage_converter.py  # DM→GeoPackage 変換アルゴリズム
+│   ├── algorithm_apply_style.py      # スタイル適用アルゴリズム
+│   ├── constants.py                  # 定数・分類コード表
+│   ├── schema.py                     # GeoPackage スキーマ定義
+│   ├── parser/                       # DMファイル解析（reader / classifier / parser / models）
+│   └── writer/                       # GeoPackage 生成（writer / geometry / crs / style / log_writer）
+├── tests/                            # テスト（unit / data）
+├── imgs/                             # アイコン画像
+├── metadata.txt
+└── pyproject.toml
 ```
 
 ---
