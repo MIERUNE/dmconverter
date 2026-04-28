@@ -15,6 +15,7 @@ from qgis.core import (
     QgsFeature,
     QgsField,
     QgsFields,
+    QgsGeometry,
     QgsVectorFileWriter,
     QgsVectorLayer,
     QgsWkbTypes,
@@ -30,7 +31,7 @@ from ..schema import (
     FIELD_DEFS,
 )
 from .crs import get_epsg
-from .geometry import direction_angle
+from .geometry import direction_angle, group_ring_polygons, to_ring_polygon_geometry
 
 
 def _build_fields() -> QgsFields:
@@ -179,22 +180,54 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         layer.updateFields()
 
         # フィーチャ追加
+        # 面(E1)に中庭線（内輪, zukei_kubun=31）が含まれる場合はリングポリゴンに変換する
         features: list[QgsFeature] = []
-        for elem, map_sheet in elem_pairs:
-            if not elem.coordinates:
-                continue
-            try:
-                geom = geom_func(elem, map_sheet)
-            except Exception as e:
-                geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
-                errors.append(
-                    f"{elem.element_type} {elem.dm_code} "
-                    f"要素ID={elem.element_id}: {e}"
-                )
-                continue
-            if geom is None or geom.isEmpty():
-                geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
-                continue
+        ring_groups = group_ring_polygons(elem_pairs) if geom_type_name == "面" else []
+
+        # (elem, geom) ペアのリストを構築
+        elem_geom_pairs: list[tuple[ParsedElement, QgsGeometry]] = []
+        if ring_groups:
+            for outer_elem, outer_ms, inner_elems in ring_groups:
+                try:
+                    geom = (
+                        to_ring_polygon_geometry(outer_elem, outer_ms, inner_elems)
+                        if inner_elems
+                        else geom_func(outer_elem, outer_ms)
+                    )
+                except Exception as e:
+                    geom_fail_counter[
+                        (outer_elem.element_type, outer_elem.dm_code)
+                    ] += 1
+                    errors.append(
+                        f"{outer_elem.element_type} {outer_elem.dm_code} "
+                        f"要素ID={outer_elem.element_id}: {e}"
+                    )
+                    continue
+                if geom is None or geom.isEmpty():
+                    geom_fail_counter[
+                        (outer_elem.element_type, outer_elem.dm_code)
+                    ] += 1
+                    continue
+                elem_geom_pairs.append((outer_elem, geom))
+        else:
+            for elem, map_sheet in elem_pairs:
+                if not elem.coordinates:
+                    continue
+                try:
+                    geom = geom_func(elem, map_sheet)
+                except Exception as e:
+                    geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
+                    errors.append(
+                        f"{elem.element_type} {elem.dm_code} "
+                        f"要素ID={elem.element_id}: {e}"
+                    )
+                    continue
+                if geom is None or geom.isEmpty():
+                    geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
+                    continue
+                elem_geom_pairs.append((elem, geom))
+
+        for elem, geom in elem_geom_pairs:
             feat = QgsFeature(layer.fields())
             feat.setGeometry(geom)
             for attr_name, field_name, _ in FIELD_DEFS:
