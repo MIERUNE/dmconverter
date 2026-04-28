@@ -212,8 +212,10 @@ def apply_kandan_filter(layer: QgsVectorLayer) -> None:
     """kandan=1（間断）のフィーチャをルールベースレンダラーで非表示にする。
 
     カテゴリ分けレンダラーをルールベースに変換し、
-    各ルールに "間断区分" != 1 フィルタを追加する。
+    各ルールに "間断区分" = 0 フィルタを追加する。
     """
+    if layer.fields().indexFromName("間断区分") == -1:
+        return
     rule_renderer = QgsRuleBasedRenderer.convertFromRenderer(layer.renderer())
     if rule_renderer is None:
         return
