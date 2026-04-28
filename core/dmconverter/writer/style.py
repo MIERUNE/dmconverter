@@ -183,8 +183,6 @@ def build_renderer_cache(
     feedback=None,
 ) -> dict[QgsWkbTypes.GeometryType, QgsFeatureRenderer]:
     """QMLを1回だけロードしてレンダラーをキャッシュする。
-
-    複数レイヤに同じQMLを適用する際、毎回ファイルをパースするコストを避けるため
     ジオメトリタイプ別にレンダラーを事前構築して返す。
 
     Returns:
@@ -218,7 +216,6 @@ def apply_qml_by_geom_type(
     Args:
         layer: スタイルを適用するレイヤ
         renderer_cache: build_renderer_cache() の戻り値
-        feedback: QgsProcessingFeedback（任意）
 
     Returns:
         レンダラーを適用できた場合はTrue

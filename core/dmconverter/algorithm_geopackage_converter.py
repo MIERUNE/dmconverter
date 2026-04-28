@@ -8,9 +8,6 @@ import glob
 import os
 from collections import Counter
 
-
-from qgis.PyQt.QtCore import QCoreApplication
-
 from qgis.core import (
     QgsCoordinateTransform,
     QgsLayerTreeGroup,
@@ -23,13 +20,19 @@ from qgis.core import (
     QgsRectangle,
     QgsVectorLayer,
 )
+from qgis.PyQt.QtCore import QCoreApplication
 
 from .constants import CLASSIFICATIONS, get_classification_name
 from .parser.classifier import classify
 from .parser.parser import parse
 from .parser.reader import detect_encoding, read_records
 from .writer.log_writer import write_log
-from .writer.style import apply_annotation_labels, apply_qml_by_geom_type, build_qml_map, build_renderer_cache
+from .writer.style import (
+    apply_annotation_labels,
+    apply_qml_by_geom_type,
+    build_qml_map,
+    build_renderer_cache,
+)
 from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
@@ -331,7 +334,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                     combined_extent.combineExtentWith(layer_extent)
 
             feedback.setProgress(70 + int(30 * (idx + 1) / total_layers))
-            if idx % 20 == 0:
+            if idx % 30 == 0:
                 QCoreApplication.processEvents()
 
         # ズーム処理
