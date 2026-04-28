@@ -334,7 +334,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                     combined_extent.combineExtentWith(layer_extent)
 
             feedback.setProgress(70 + int(30 * (idx + 1) / total_layers))
-            if idx % 30 == 0:
+            if idx % 25 == 0:
                 QCoreApplication.processEvents()
 
         # ズーム処理
