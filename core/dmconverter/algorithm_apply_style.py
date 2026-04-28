@@ -14,7 +14,12 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
-from .writer.style import apply_qml_by_geom_type, build_qml_map, build_renderer_cache, export_qlr
+from .writer.style import (
+    apply_qml_by_geom_type,
+    build_qml_map,
+    build_renderer_cache,
+    export_qlr,
+)
 
 
 class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
@@ -132,7 +137,9 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
 
         return {self.OUTPUT_QLR: output_qlr} if output_qlr else {}
 
-    def _process_gpkg(self, gpkg_path: str, renderer_cache: dict, feedback) -> str | None:
+    def _process_gpkg(
+        self, gpkg_path: str, renderer_cache: dict, feedback
+    ) -> str | None:
         """1つのGeoPackageにスタイルを適用してQLRを出力する。
 
         Returns:
