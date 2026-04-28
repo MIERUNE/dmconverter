@@ -221,9 +221,9 @@ def apply_kandan_filter(layer: QgsVectorLayer) -> None:
     for rule in root.children():
         expr = rule.filterExpression()
         if expr:
-            rule.setFilterExpression(f'({expr}) AND "間断区分" != 1')
+            rule.setFilterExpression(f'({expr}) AND "間断区分" = 0')
         else:
-            rule.setFilterExpression('"間断区分" != 1')
+            rule.setFilterExpression('"間断区分" = 0')
     layer.setRenderer(rule_renderer)
     layer.triggerRepaint()
 
