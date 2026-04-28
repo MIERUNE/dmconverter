@@ -28,7 +28,12 @@ from .parser.classifier import classify
 from .parser.parser import parse
 from .parser.reader import detect_encoding, read_records
 from .writer.log_writer import write_log
-from .writer.style import apply_annotation_labels, apply_kandan_filter, apply_qml_by_geom_type, build_qml_map
+from .writer.style import (
+    apply_annotation_labels,
+    apply_kandan_filter,
+    apply_qml_by_geom_type,
+    build_qml_map,
+)
 from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
