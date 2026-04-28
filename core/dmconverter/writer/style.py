@@ -15,6 +15,7 @@ from qgis.core import (
     QgsNullSymbolRenderer,
     QgsPalLayerSettings,
     QgsProperty,
+    QgsRuleBasedRenderer,
     QgsTextFormat,
     QgsUnitTypes,
     QgsVectorLayer,
@@ -205,6 +206,26 @@ def apply_qml_by_geom_type(
         if feedback is not None:
             feedback.reportError(f"QML読み込み失敗: {layer.name()}: {load_msg}")
     return load_ok
+
+
+def apply_kandan_filter(layer: QgsVectorLayer) -> None:
+    """kandan=1（間断）のフィーチャをルールベースレンダラーで非表示にする。
+
+    カテゴリ分けレンダラーをルールベースに変換し、
+    各ルールに "間断区分" != 1 フィルタを追加する。
+    """
+    rule_renderer = QgsRuleBasedRenderer.convertFromRenderer(layer.renderer())
+    if rule_renderer is None:
+        return
+    root = rule_renderer.rootRule()
+    for rule in root.children():
+        expr = rule.filterExpression()
+        if expr:
+            rule.setFilterExpression(f'({expr}) AND "間断区分" != 1')
+        else:
+            rule.setFilterExpression('"間断区分" != 1')
+    layer.setRenderer(rule_renderer)
+    layer.triggerRepaint()
 
 
 def export_qlr(nodes: list, qlr_path: str) -> str | None:

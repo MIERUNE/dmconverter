@@ -14,7 +14,7 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
-from .writer.style import apply_qml_by_geom_type, build_qml_map, export_qlr
+from .writer.style import apply_kandan_filter, apply_qml_by_geom_type, build_qml_map, export_qlr
 
 
 class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
@@ -153,6 +153,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 continue
 
             apply_qml_by_geom_type(layer, qml_map, feedback)
+            apply_kandan_filter(layer)
             temp_group.addLayer(layer)
 
         nodes = temp_group.children()
