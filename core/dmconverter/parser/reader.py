@@ -12,7 +12,7 @@ def detect_encoding(path: str) -> str:
     """ファイルのエンコーディングを判定する。
 
     判定順序:
-        1. UTF-8 BOM があれば utf-8-sig
+        1. UTF-8 BOM があれば utf-8（BOMはread_recordsで除去される）
         2. BOM なしで UTF-8 としてデコードできれば utf-8
         3. cp932 としてデコードできれば cp932
         4. いずれも失敗した場合は ValueError
@@ -23,9 +23,9 @@ def detect_encoding(path: str) -> str:
     with open(path, "rb") as f:
         raw = f.read()
 
-    # BOM あり → UTF-8
+    # BOM あり → UTF-8（BOMはread_recordsで除去される）
     if raw.startswith(b"\xef\xbb\xbf"):
-        return "utf-8-sig"
+        return "utf-8"
 
     # BOM なし → UTF-8 として検証
     try:
@@ -55,7 +55,12 @@ def read_records(path: str) -> Iterator[bytes]:
         FileNotFoundError: ファイルが存在しない場合
     """
     with open(path, "rb") as f:
+        first = True
         for line in f:
             record = line.rstrip(b"\r\n")
+            # 先頭行のUTF-8 BOM（EF BB BF）を除去
+            if first:
+                record = record.removeprefix(b"\xef\xbb\xbf")
+                first = False
             if record:
                 yield record

@@ -3,7 +3,7 @@ import unittest
 
 from core.dmconverter.parser.classifier import (
     ClassifiedRecords,
-    _calc_mesh_row_count,
+    _collect_mesh_rows,
     _get_revision_count,
     _has_following_lines,
     _is_element_prefix,
@@ -77,18 +77,12 @@ class TestGetRevisionCount(unittest.TestCase):
         self.assertGreaterEqual(count, 0)
 
 
-class TestCalcMeshRowCount(unittest.TestCase):
-    def test_zero_revision(self):
-        """修正回数0: 3 + 3×1 = 6行"""
-        self.assertEqual(_calc_mesh_row_count(0), 6)
-
-    def test_one_revision(self):
-        """修正回数1: 3 + 3×2 = 9行"""
-        self.assertEqual(_calc_mesh_row_count(1), 9)
-
-    def test_two_revisions(self):
-        """修正回数2: 3 + 3×3 = 12行"""
-        self.assertEqual(_calc_mesh_row_count(2), 12)
+class TestCollectMeshRows(unittest.TestCase):
+    def test_sample_data_mesh_rows(self):
+        """サンプルデータのMレコードが正しく収集される"""
+        mesh_rows = _collect_mesh_rows(_SAMPLE_RECORDS)
+        self.assertTrue(mesh_rows[0].startswith(b"M "))
+        self.assertGreaterEqual(len(mesh_rows), 3)  # 最低(a)(b)(c)の3行
 
 
 class TestIsElementPrefix(unittest.TestCase):
@@ -161,11 +155,10 @@ class TestClassify(unittest.TestCase):
             classify(iter(_SAMPLE_RECORDS[:2]))
 
     def test_mesh_rows_count(self):
-        """Mレコード行数が修正回数に基づいて正しく収集される"""
+        """Mレコード行数がcourse_countによる可変長として正しく収集される"""
         result = classify(iter(_SAMPLE_RECORDS))
-        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
-        expected = _calc_mesh_row_count(revision_count)
-        self.assertEqual(len(result.mesh_rows), expected)
+        expected_mesh_rows = _collect_mesh_rows(_SAMPLE_RECORDS)
+        self.assertEqual(len(result.mesh_rows), len(expected_mesh_rows))
 
     def test_mesh_rows_first_starts_with_m(self):
         """Mレコードの先頭が"M "で始まる"""
@@ -177,8 +170,7 @@ class TestClassify(unittest.TestCase):
         h1 = _IDX["first_h"]
         h2 = _IDX["second_h"]
         # Mレコード全行 + H1 + 配下要素 + H2 + 配下要素の範囲を切り出す
-        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
-        mesh_count = _calc_mesh_row_count(revision_count)
+        mesh_count = len(_collect_mesh_rows(_SAMPLE_RECORDS))
         end = h2 + 2  # H2 + 最低1要素
         records = _SAMPLE_RECORDS[:mesh_count] + _SAMPLE_RECORDS[h1:end]
         result = classify(iter(records))
@@ -191,8 +183,7 @@ class TestClassify(unittest.TestCase):
         e2_idx = _IDX["first_e2"]
         coord_indices = _IDX["e2_coord_indices"]
         last_coord = coord_indices[-1]
-        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
-        mesh_count = _calc_mesh_row_count(revision_count)
+        mesh_count = len(_collect_mesh_rows(_SAMPLE_RECORDS))
         records = (
             _SAMPLE_RECORDS[:mesh_count]
             + [_SAMPLE_RECORDS[h_idx]]
@@ -206,8 +197,7 @@ class TestClassify(unittest.TestCase):
         """E5要素は座標行を持たない"""
         h_idx = _IDX["first_h"]
         e5_idx = _IDX["first_e5"]
-        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
-        mesh_count = _calc_mesh_row_count(revision_count)
+        mesh_count = len(_collect_mesh_rows(_SAMPLE_RECORDS))
         records = _SAMPLE_RECORDS[:mesh_count] + [
             _SAMPLE_RECORDS[h_idx],
             _SAMPLE_RECORDS[e5_idx],
@@ -222,8 +212,7 @@ class TestClassify(unittest.TestCase):
         e5_idx = _IDX["first_e5"]
         g_record = b"G ".ljust(84)
         t_record = b"T ".ljust(84)
-        revision_count = _get_revision_count(_SAMPLE_RECORDS[0])
-        mesh_count = _calc_mesh_row_count(revision_count)
+        mesh_count = len(_collect_mesh_rows(_SAMPLE_RECORDS))
         records = _SAMPLE_RECORDS[:mesh_count] + [
             _SAMPLE_RECORDS[h_idx],
             g_record,
@@ -250,14 +239,13 @@ class TestClassifyWithSampleData(unittest.TestCase):
                 self.assertTrue(result.mesh_rows[0].startswith(b"M "))
 
     def test_mesh_rows_dynamic_count(self):
-        """Mレコード行数が修正回数に基づく"""
+        """Mレコード行数がcourse_countに基づいて動的に収集される"""
         for dm_path in SAMPLE_DM_FILES:
             with self.subTest(dm_path=dm_path):
                 records = list(read_records(dm_path))
                 result = classify(iter(records))
-                revision_count = _get_revision_count(records[0])
-                expected = _calc_mesh_row_count(revision_count)
-                self.assertEqual(len(result.mesh_rows), expected)
+                expected_mesh_rows = _collect_mesh_rows(records)
+                self.assertEqual(len(result.mesh_rows), len(expected_mesh_rows))
 
     def test_element_groups_not_empty(self):
         """要素グループが空でない"""

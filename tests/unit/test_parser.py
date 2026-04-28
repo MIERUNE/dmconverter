@@ -131,6 +131,8 @@ class TestExtractCommonFields(unittest.TestCase):
         fields = _extract_common_fields(record)
         self.assertEqual(fields["element_type"], "E2")
         self.assertEqual(fields["dm_code"], "2101")
+        self.assertEqual(fields["chiiki_bunrui"], 0)
+        self.assertEqual(fields["jouhou_bunrui"], 0)
         self.assertEqual(fields["hierarchy"], 1)
         self.assertEqual(fields["data_kubun"], 2)
         self.assertEqual(fields["coord_count"], 80)
@@ -142,19 +144,37 @@ class TestExtractCommonFields(unittest.TestCase):
         fields = _extract_common_fields(record)
         self.assertEqual(fields["element_type"], "E5")
         self.assertEqual(fields["dm_code"], "2253")
+        self.assertEqual(fields["chiiki_bunrui"], 0)
+        self.assertEqual(fields["jouhou_bunrui"], 0)
         self.assertEqual(fields["coord_count"], 0)
+
+    def test_chiiki_and_jouhou_bunrui_field_widths(self):
+        """chiiki_bunrui(I2) と jouhou_bunrui(I4) のオフセット・桁数を検証する"""
+        record = "E22101 21234   0 1212 00 00  80  14      0      0      0 0       170300000000      1"
+        fields = _extract_common_fields(record)
+        self.assertEqual(fields["chiiki_bunrui"], 2)  # record[6:8]  = " 2"
+        self.assertEqual(fields["jouhou_bunrui"], 1234)  # record[8:12] = "1234"
 
 
 class TestParsePointElement(unittest.TestCase):
     def test_e5_embedded_coordinates(self):
         """E5要素の埋め込み座標を正しく解析する"""
         record = "E52253 0   0   1 2 00350 00   0   0 7530601721853      0 0       170300000000      1"
-        elem = _parse_point_element(record)
+        elem = _parse_point_element(record, [])
         self.assertEqual(elem.element_type, "E5")
         self.assertEqual(elem.dm_code, "2253")
         self.assertEqual(len(elem.coordinates), 1)
         self.assertEqual(elem.coordinates[0].x, 753060)
         self.assertEqual(elem.coordinates[0].y, 1721853)
+
+    def test_e5_short_record_returns_empty_coordinates(self):
+        """E5レコードが58bytes未満の場合、座標なしで返しwarningを追加する"""
+        short_record = "E52253 0   0   1 2 00350 00   0   0"  # 35bytes
+        warnings: list[str] = []
+        elem = _parse_point_element(short_record, warnings)
+        self.assertEqual(elem.coordinates, ())
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("不正なレコード長", warnings[0])
 
 
 class TestParseMeshInfo(unittest.TestCase):
@@ -182,7 +202,7 @@ class TestParseAnnotationElement(unittest.TestCase):
         """E7要素の代表点座標を正しく解析する"""
         record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
         annotation_line = "0    -28   15    0 4410                                                             "
-        elem = _parse_annotation_element(record, (annotation_line,))
+        elem = _parse_annotation_element(record, (annotation_line,), [])
         self.assertEqual(elem.element_type, "E7")
         self.assertEqual(elem.dm_code, "7101")
         self.assertEqual(len(elem.coordinates), 1)
@@ -193,7 +213,7 @@ class TestParseAnnotationElement(unittest.TestCase):
         """E7要素の注記情報を正しく解析する"""
         record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
         annotation_line = "0    -28   15    0 4410                                                             "
-        elem = _parse_annotation_element(record, (annotation_line,))
+        elem = _parse_annotation_element(record, (annotation_line,), [])
         assert elem.annotation is not None
         self.assertEqual(elem.annotation.orientation, 0)
         self.assertEqual(elem.annotation.angle, -28)
@@ -205,9 +225,29 @@ class TestParseAnnotationElement(unittest.TestCase):
     def test_e7_no_annotation_lines(self):
         """後続行がない場合、annotationはNone"""
         record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
-        elem = _parse_annotation_element(record, ())
+        elem = _parse_annotation_element(record, (), [])
         self.assertIsNone(elem.annotation)
         self.assertEqual(len(elem.coordinates), 1)
+
+    def test_e7_short_record_returns_empty_coordinates(self):
+        """E7レコードが56bytes未満の場合、座標なしで返しwarningを追加する"""
+        short_record = "E77101 0   0   2 2 04352 00   3   1"  # 35bytes
+        warnings: list[str] = []
+        elem = _parse_annotation_element(short_record, (), warnings)
+        self.assertEqual(elem.coordinates, ())
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("不正なレコード長", warnings[0])
+
+    def test_e7_short_annotation_line_returns_no_annotation(self):
+        """後続行が20bytes未満の場合、座標はあるがannotationなしでwarningを追加する"""
+        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        short_annotation = "0    -28   15"  # 13bytes
+        warnings: list[str] = []
+        elem = _parse_annotation_element(record, (short_annotation,), warnings)
+        self.assertEqual(len(elem.coordinates), 1)
+        self.assertIsNone(elem.annotation)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("不正な注記後続レコード長", warnings[0])
 
 
 class TestParseAttributeElement(unittest.TestCase):
@@ -215,7 +255,7 @@ class TestParseAttributeElement(unittest.TestCase):
         """E8要素の代表点座標を正しく解析する"""
         record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
         attribute_line = "12345                                                                               "
-        elem = _parse_attribute_element(record, (attribute_line,))
+        elem = _parse_attribute_element(record, (attribute_line,), [])
         self.assertEqual(elem.element_type, "E8")
         self.assertEqual(len(elem.coordinates), 1)
         self.assertEqual(elem.coordinates[0].x, 500000)
@@ -225,15 +265,24 @@ class TestParseAttributeElement(unittest.TestCase):
         """E8要素の属性データを正しく解析する"""
         record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
         attribute_line = "12345                                                                               "
-        elem = _parse_attribute_element(record, (attribute_line,))
+        elem = _parse_attribute_element(record, (attribute_line,), [])
         assert elem.attribute is not None
         self.assertEqual(elem.attribute.data, "12345")
 
     def test_e8_no_attribute_lines(self):
         """後続行がない場合、attributeはNone"""
         record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
-        elem = _parse_attribute_element(record, ())
+        elem = _parse_attribute_element(record, (), [])
         self.assertIsNone(elem.attribute)
+
+    def test_e8_short_record_returns_empty_coordinates(self):
+        """E8レコードが56bytes未満の場合、座標なしで返しwarningを追加する"""
+        short_record = "E87101 0   0   1 2 00350 00   1   1"  # 35bytes
+        warnings: list[str] = []
+        elem = _parse_attribute_element(short_record, (), warnings)
+        self.assertEqual(elem.coordinates, ())
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("不正なレコード長", warnings[0])
 
 
 class TestParseE7WithSampleData(unittest.TestCase):
@@ -382,6 +431,15 @@ class TestParseWithSampleData(unittest.TestCase):
                                 1,
                                 "E5要素の座標が1つでない",
                             )
+
+    def test_parse_warnings_empty_for_valid_data(self):
+        """正常なDMファイルではparse_warningsが空タプルであること"""
+        for dm_path in SAMPLE_DM_FILES:
+            with self.subTest(dm_path=dm_path):
+                result = parse(
+                    classify(read_records(dm_path), detect_encoding(dm_path))
+                )
+                self.assertEqual(result.parse_warnings, ())
 
     def test_e6_elements_have_coordinates(self):
         """E6要素が座標を持つ"""
