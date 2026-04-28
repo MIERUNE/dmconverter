@@ -30,7 +30,6 @@
 | E5     | 点   | Point      |
 | E6     | 方向 | Point      |
 | E7     | 注記 | Point      |
-| E8     | 属性 | -（対応予定）|
 
 ---
 
@@ -46,7 +45,7 @@
 │    reader → classifier → parser → models    │
 ├──────────────────────────────────────────────┤
 │  Writer Layer (writer/)                      │  ← GeoPackage生成・スタイル適用
-│    geometry / crs / style / log_writer       │
+│    geometry / crs / writer / style / log_writer │
 └──────────────────────────────────────────────┘
 ```
 
@@ -65,9 +64,9 @@ DM ファイルが QGIS プロジェクトに表示されるまでの処理の�
 3. **parser**: 分類済みレコードを解釈し、座標・属性を持つ `ParsedDM` に変換
 4. **writer.create_merged_layers**: 複数の `ParsedDM` をマージして `QgsVectorLayer` を生成
 5. **writer.save_to_geopackage**: `QgsVectorLayer` を GeoPackage ファイルに書き出し
-6. **algorithm（後処理）**: 生成した GeoPackage をプロジェクトに追加し、マップをズーム調整
-7. **style.apply_annotation_labels**: E7 注記レイヤにラベル表示を設定
-8. **log_writer**: 変換結果サマリーをテキストファイルに出力（オプション）
+6. **log_writer**: 変換結果サマリーをテキストファイルに出力（オプション）
+7. **algorithm**: 生成した GeoPackage をプロジェクトに追加し、マップをズーム調整
+8. **style.apply_annotation_labels**: E7 注記レイヤにラベル表示を設定
 
 ---
 
