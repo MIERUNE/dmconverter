@@ -16,6 +16,7 @@ from qgis.core import (
 
 from .writer.style import (
     apply_direction_rotation,
+    apply_kandan_filter,
     apply_qml_by_geom_type,
     build_qml_map,
     build_renderer_cache,
@@ -164,6 +165,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             apply_qml_by_geom_type(layer, renderer_cache)
             if layer.fields().lookupField("方向角") >= 0:
                 apply_direction_rotation(layer)
+            apply_kandan_filter(layer)
             temp_group.addLayer(layer)
 
         nodes = temp_group.children()

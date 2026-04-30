@@ -30,6 +30,7 @@ from .writer.log_writer import write_log
 from .writer.style import (
     apply_annotation_labels,
     apply_direction_rotation,
+    apply_kandan_filter,
     apply_qml_by_geom_type,
     build_qml_map,
     build_renderer_cache,
@@ -329,6 +330,8 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             # E6方向レイヤに方向角フィールドによる回転を設定
             if is_direction:
                 apply_direction_rotation(gpkg_layer)
+
+            apply_kandan_filter(gpkg_layer)
 
             layer_crs = gpkg_layer.crs()
 
