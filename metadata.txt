@@ -1,6 +1,6 @@
 [general]
 name=DM Converter
-qgisMinimumVersion=3.0
+qgisMinimumVersion=3.22
 description=DMファイル（日本の数値地図フォーマット）をGeoPackageに変換するQGISプラグインです。<br>単一ファイルまたはフォルダを指定した一括変換に対応し、JGD2011 平面直角座標系を自動判定します。
 about=公共測量で使用される DM ファイルを、QGISで扱いやすい GeoPackage形式に変換します。<br>面・線・円・円弧・点・方向・注記（E1〜E7）の各要素タイプに対応しています。
 # Version will be updated with release tag on Github workflow
