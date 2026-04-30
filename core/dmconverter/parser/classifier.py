@@ -53,7 +53,7 @@ class ClassifiedRecords:
 
 
 def _is_element_prefix(record: bytes) -> bool:
-    """Eレコード（E1-E8）か判定する。"""
+    """Eレコード（E1-E7）か判定する。"""
     if len(record) < 2:
         return False
     return record[0:1] == b"E" and ord(b"1") <= record[1] <= ord(b"8")
@@ -75,7 +75,8 @@ def _has_following_lines(element_type: int) -> bool:
     E1-E4: 後続行に座標データを持つ。
     E5:    座標がE行自体に埋め込まれているため後続行なし。
     E6:    後続行に座標データを持つ。
-    E7/E8: 後続行に注記・属性データを持つ。
+    E7:    後続行に注記データを持つ。
+    E8:    後続行に属性データを持つ（未対応のため後続行は収集のみ）。
     """
     return element_type in b"1234678"
 
@@ -233,7 +234,7 @@ def classify(records: Iterator[bytes], encoding: str = "cp932") -> ClassifiedRec
                     )
                 )
             else:
-                # E5-E8: 座標はE行自体に埋め込まれているため後続行なし
+                # E5: 座標はE行自体に埋め込まれているため後続行なし
                 current_elements.append(
                     ElementRecord(
                         record=record,

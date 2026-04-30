@@ -11,7 +11,6 @@ from ..constants import COORD_FIELD_WIDTH
 from .classifier import ClassifiedRecords, ElementGroup, ElementRecord
 from .models import (
     AnnotationInfo,
-    AttributeInfo,
     Coordinate,
     MapSheetInfo,
     MeshInfo,
@@ -155,7 +154,7 @@ def _build_parsed_element(fields: dict, **kwargs) -> ParsedElement:
 
 
 # ---------------------------------------------------------------------------
-# 要素タイプ別パーサー（E1-E8）
+# 要素タイプ別パーサー（E1-E7）
 # ---------------------------------------------------------------------------
 
 
@@ -191,7 +190,7 @@ def _parse_line_area_element(
 
 
 def _extract_embedded_coordinate(record: str, fields: dict) -> tuple[Coordinate, ...]:
-    """E5/E7/E8の埋め込み代表点座標を抽出する（record[35:56]）。"""
+    """E5/E7の埋め込み代表点座標を抽出する（record[35:56]）。"""
     x_val = _safe_int(record[35:42])
     y_val = _safe_int(record[42:49])
     z_val = _safe_int(record[49:56]) if fields["data_kubun"] in (3, 6) else 0
@@ -292,37 +291,6 @@ def _parse_annotation_element(
     )
 
 
-def _parse_attribute_element(
-    record: str, attribute_lines: tuple[str, ...], warnings: list[str]
-) -> ParsedElement:
-    """E8（属性）を解析する。代表点座標はE行、属性データは後続行から取得。"""
-    fields = _extract_common_fields(record)
-
-    # レコード長チェック（座標取得には56bytes必要）
-    if len(record) < 56:
-        msg = (
-            f"E8 {fields['dm_code']} 要素ID={fields['element_id']}: "
-            f"不正なレコード長 {len(record)} bytes（最低56bytes必要）"
-        )
-        logger.warning(msg)
-        warnings.append(msg)
-        return _build_parsed_element(fields, coordinates=())
-
-    # 代表点座標（E5と同じ位置）
-    coordinates = _extract_embedded_coordinate(record, fields)
-
-    # 後続属性レコードの解析（レコード全体が属性データ）
-    attribute: AttributeInfo | None = None
-    if attribute_lines:
-        data = "".join(attribute_lines).rstrip()
-        attribute = AttributeInfo(data=data)
-
-    return _build_parsed_element(
-        fields,
-        coordinates=coordinates,
-        attribute=attribute,
-    )
-
 
 _COORD_LINE_PARSERS = {
     "1": _parse_line_area_element,
@@ -348,9 +316,6 @@ def _parse_element(
 
     if element_type == "7":
         return _parse_annotation_element(record, coord_lines, warnings)
-
-    if element_type == "8":
-        return _parse_attribute_element(record, coord_lines, warnings)
 
     parser = _COORD_LINE_PARSERS.get(element_type)
     if parser is not None:
