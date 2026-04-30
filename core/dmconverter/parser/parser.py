@@ -291,7 +291,6 @@ def _parse_annotation_element(
     )
 
 
-
 _COORD_LINE_PARSERS = {
     "1": _parse_line_area_element,
     "2": _parse_line_area_element,

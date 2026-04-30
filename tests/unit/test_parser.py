@@ -249,7 +249,6 @@ class TestParseAnnotationElement(unittest.TestCase):
         self.assertIn("不正な注記後続レコード長", warnings[0])
 
 
-
 class TestParseE7WithSampleData(unittest.TestCase):
     def test_e7_elements_have_coordinates_and_annotation(self):
         """サンプルデータのE7要素が座標と注記情報を持つ"""
