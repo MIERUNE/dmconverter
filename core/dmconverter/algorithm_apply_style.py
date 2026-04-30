@@ -18,6 +18,7 @@ from .writer.style import (
     apply_direction_rotation,
     apply_qml_by_geom_type,
     build_qml_map,
+    build_renderer_cache,
     export_qlr,
 )
 
@@ -105,6 +106,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo(
             f"QMLマップ構築完了: {len(qml_map)}種のジオメトリタイプに対応"
         )
+        renderer_cache = build_renderer_cache(qml_map, feedback)
 
         if input_gpkg:
             gpkg_files = [input_gpkg]
@@ -121,7 +123,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         output_qlr = ""
         for gpkg_path in gpkg_files:
             feedback.pushInfo(f"処理中: {gpkg_path}")
-            qlr_path = self._process_gpkg(gpkg_path, qml_map, feedback)
+            qlr_path = self._process_gpkg(gpkg_path, renderer_cache, feedback)
             if qlr_path:
                 output_qlr = qlr_path
 
@@ -136,7 +138,9 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
 
         return {self.OUTPUT_QLR: output_qlr} if output_qlr else {}
 
-    def _process_gpkg(self, gpkg_path: str, qml_map: dict, feedback) -> str | None:
+    def _process_gpkg(
+        self, gpkg_path: str, renderer_cache: dict, feedback
+    ) -> str | None:
         """1つのGeoPackageにスタイルを適用してQLRを出力する。
 
         Returns:
@@ -157,7 +161,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushWarning(f"レイヤ無効: {layer_name}")
                 continue
 
-            apply_qml_by_geom_type(layer, qml_map, feedback)
+            apply_qml_by_geom_type(layer, renderer_cache)
             if layer.fields().lookupField("方向角") >= 0:
                 apply_direction_rotation(layer)
             temp_group.addLayer(layer)
