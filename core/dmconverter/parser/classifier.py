@@ -76,9 +76,8 @@ def _has_following_lines(element_type: int) -> bool:
     E5:    座標がE行自体に埋め込まれているため後続行なし。
     E6:    後続行に座標データを持つ。
     E7:    後続行に注記データを持つ。
-    E8:    後続行に属性データを持つ（未対応のため後続行は収集のみ）。
     """
-    return element_type in b"1234678"
+    return element_type in b"123467"
 
 
 def _get_revision_count(mesh_row_a: bytes) -> int:
