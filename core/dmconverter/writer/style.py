@@ -15,6 +15,8 @@ from qgis.core import (
     QgsNullSymbolRenderer,
     QgsPalLayerSettings,
     QgsProperty,
+    QgsRenderContext,
+    QgsSymbolLayer,
     QgsTextFormat,
     QgsUnitTypes,
     QgsVectorLayer,
@@ -117,6 +119,25 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
 
     # 注記の原点（ポイントシンボル）を非表示にする
     layer.setRenderer(QgsNullSymbolRenderer())
+
+
+def apply_direction_rotation(layer: QgsVectorLayer) -> None:
+    """E6方向レイヤのシンボルに「方向角」フィールドによる回転を設定する。
+
+    QMLの<rotation/>が空でも、方向角フィールドを使ってシンボルを回転させる。
+    direction_angle()はCCW/東=0°で計算するため、QGISのCW回転に合わせて符号反転する。
+    """
+    renderer = layer.renderer()
+    if renderer is None:
+        return
+    for symbol in renderer.symbols(QgsRenderContext()):
+        for i in range(symbol.symbolLayerCount()):
+            sl = symbol.symbolLayer(i)
+            sl.setDataDefinedProperty(
+                QgsSymbolLayer.Property.PropertyAngle,
+                QgsProperty.fromExpression('0 - "方向角"'),
+            )
+    layer.triggerRepaint()
 
 
 def build_qml_map(
