@@ -29,6 +29,7 @@ from .parser.reader import detect_encoding, read_records
 from .writer.log_writer import write_log
 from .writer.style import (
     apply_annotation_labels,
+    apply_direction_rotation,
     apply_qml_by_geom_type,
     build_qml_map,
     build_renderer_cache,
@@ -315,6 +316,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             sub_groups[group_name].addLayer(gpkg_layer)
 
             is_annotation = self._layer_element_types.get(name) == "E7"
+            is_direction = self._layer_element_types.get(name) == "E6"
 
             # E7注記レイヤにラベル設定を適用
             if is_annotation:
@@ -323,6 +325,10 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             # E7以外にQMLスタイルを適用
             if renderer_cache and not is_annotation:
                 apply_qml_by_geom_type(gpkg_layer, renderer_cache)
+
+            # E6方向レイヤに方向角フィールドによる回転を設定
+            if is_direction:
+                apply_direction_rotation(gpkg_layer)
 
             layer_crs = gpkg_layer.crs()
 
