@@ -135,11 +135,15 @@ class TestHasFollowingLines(unittest.TestCase):
         """E5は座標がE行に埋め込まれているため後続行なし"""
         self.assertFalse(_has_following_lines(ord(b"5")))
 
-    def test_e6_e7_e8_have_following_lines(self):
-        """E6は座標行、E7は注記データ行、E8は属性データ行を持つ"""
-        for t in b"678":
+    def test_e6_e7_have_following_lines(self):
+        """E6は座標行、E7は注記データ行を持つ"""
+        for t in b"67":
             with self.subTest(t=t):
                 self.assertTrue(_has_following_lines(t))
+
+    def test_e8_has_no_following_lines(self):
+        """E8は未対応のため後続行なし"""
+        self.assertFalse(_has_following_lines(ord(b"8")))
 
 
 class TestClassify(unittest.TestCase):
