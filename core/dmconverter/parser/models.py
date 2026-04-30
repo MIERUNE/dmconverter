@@ -30,17 +30,10 @@ class AnnotationInfo:
 
 
 @dataclass(frozen=True)
-class AttributeInfo:
-    """E8属性データ（後続の属性レコードから取得）"""
-
-    data: str  # 属性データ（生の文字列）
-
-
-@dataclass(frozen=True)
 class ParsedElement:
     """解析済み要素"""
 
-    element_type: str  # "E1"-"E8"
+    element_type: str  # "E1"-"E7"
     dm_code: str  # 4桁分類コード
     chiiki_bunrui: int  # 地域分類
     jouhou_bunrui: int  # 情報分類
@@ -59,7 +52,6 @@ class ParsedElement:
     updated_date: str | None = None  # 更新取得年月（YYYY/MM or None）
     deleted_date: str | None = None  # 消去年月（YYYY/MM or None）
     annotation: AnnotationInfo | None = None  # E7のみ
-    attribute: AttributeInfo | None = None  # E8のみ
 
 
 @dataclass(frozen=True)

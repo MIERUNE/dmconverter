@@ -10,7 +10,6 @@ from core.dmconverter.parser.parser import (
     _extract_common_fields,
     _format_date,
     _parse_annotation_element,
-    _parse_attribute_element,
     _parse_coordinate_line_2d,
     _parse_coordinate_line_3d,
     _parse_map_sheet,
@@ -248,41 +247,6 @@ class TestParseAnnotationElement(unittest.TestCase):
         self.assertIsNone(elem.annotation)
         self.assertEqual(len(warnings), 1)
         self.assertIn("不正な注記後続レコード長", warnings[0])
-
-
-class TestParseAttributeElement(unittest.TestCase):
-    def test_e8_coordinates(self):
-        """E8要素の代表点座標を正しく解析する"""
-        record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
-        attribute_line = "12345                                                                               "
-        elem = _parse_attribute_element(record, (attribute_line,), [])
-        self.assertEqual(elem.element_type, "E8")
-        self.assertEqual(len(elem.coordinates), 1)
-        self.assertEqual(elem.coordinates[0].x, 500000)
-        self.assertEqual(elem.coordinates[0].y, 600000)
-
-    def test_e8_attribute_data(self):
-        """E8要素の属性データを正しく解析する"""
-        record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
-        attribute_line = "12345                                                                               "
-        elem = _parse_attribute_element(record, (attribute_line,), [])
-        assert elem.attribute is not None
-        self.assertEqual(elem.attribute.data, "12345")
-
-    def test_e8_no_attribute_lines(self):
-        """後続行がない場合、attributeはNone"""
-        record = "E87101 0   0   1 2 00350 00   1   1 500000 600000        0       170300000000      1"
-        elem = _parse_attribute_element(record, (), [])
-        self.assertIsNone(elem.attribute)
-
-    def test_e8_short_record_returns_empty_coordinates(self):
-        """E8レコードが56bytes未満の場合、座標なしで返しwarningを追加する"""
-        short_record = "E87101 0   0   1 2 00350 00   1   1"  # 35bytes
-        warnings: list[str] = []
-        elem = _parse_attribute_element(short_record, (), warnings)
-        self.assertEqual(elem.coordinates, ())
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("不正なレコード長", warnings[0])
 
 
 class TestParseE7WithSampleData(unittest.TestCase):
