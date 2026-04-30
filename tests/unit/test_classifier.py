@@ -87,7 +87,7 @@ class TestCollectMeshRows(unittest.TestCase):
 
 class TestIsElementPrefix(unittest.TestCase):
     def test_e1_to_e8(self):
-        """E1-E8を正しく判定する"""
+        """E1-E8を正しく判定する（E8は未対応だが認識対象）"""
         for i in range(1, 9):
             with self.subTest(i=i):
                 self.assertTrue(_is_element_prefix(f"E{i}2101".encode()))
@@ -135,8 +135,8 @@ class TestHasFollowingLines(unittest.TestCase):
         """E5は座標がE行に埋め込まれているため後続行なし"""
         self.assertFalse(_has_following_lines(ord(b"5")))
 
-    def test_e6_to_e8_have_following_lines(self):
-        """E6は座標行、E7/E8は注記データ行を持つ"""
+    def test_e6_e7_e8_have_following_lines(self):
+        """E6は座標行、E7は注記データ行、E8は属性データ行を持つ"""
         for t in b"678":
             with self.subTest(t=t):
                 self.assertTrue(_has_following_lines(t))
