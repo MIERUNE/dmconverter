@@ -11,11 +11,14 @@ import xml.etree.ElementTree as ET
 
 from qgis.core import (
     Qgis,
+    QgsFeatureRenderer,
     QgsLayerDefinition,
     QgsNullSymbolRenderer,
     QgsPalLayerSettings,
     QgsProperty,
+    QgsRenderContext,
     QgsRuleBasedRenderer,
+    QgsSymbolLayer,
     QgsTextFormat,
     QgsUnitTypes,
     QgsVectorLayer,
@@ -120,6 +123,25 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
     layer.setRenderer(QgsNullSymbolRenderer())
 
 
+def apply_direction_rotation(layer: QgsVectorLayer) -> None:
+    """E6方向レイヤのシンボルに「方向角」フィールドによる回転を設定する。
+
+    QMLの<rotation/>が空でも、方向角フィールドを使ってシンボルを回転させる。
+    direction_angle()はCCW/東=0°で計算するため、QGISのCW回転に合わせて符号反転する。
+    """
+    renderer = layer.renderer()
+    if renderer is None:
+        return
+    for symbol in renderer.symbols(QgsRenderContext()):
+        for i in range(symbol.symbolLayerCount()):
+            sl = symbol.symbolLayer(i)
+            sl.setDataDefinedProperty(
+                QgsSymbolLayer.Property.PropertyAngle,
+                QgsProperty.fromExpression('0 - "方向角"'),
+            )
+    layer.triggerRepaint()
+
+
 def build_qml_map(
     style_folder: str,
     feedback=None,
@@ -178,34 +200,55 @@ def _detect_qml_geom_type(qml_path: str) -> QgsWkbTypes.GeometryType | None:
     return _QML_SYMBOL_TO_GEOM_TYPE.get(symbol.get("type", ""))
 
 
-def apply_qml_by_geom_type(
-    layer: QgsVectorLayer,
+def build_renderer_cache(
     qml_map: dict[QgsWkbTypes.GeometryType, str],
     feedback=None,
+) -> dict[QgsWkbTypes.GeometryType, QgsFeatureRenderer]:
+    """QMLを1回だけロードしてレンダラーをキャッシュする。
+    ジオメトリタイプ別にレンダラーを事前構築して返す。
+
+    Returns:
+        {QgsWkbTypes.GeometryType: QgsFeatureRenderer} の辞書
+    """
+    cache: dict[QgsWkbTypes.GeometryType, QgsFeatureRenderer] = {}
+    for geom_type, qml_path in qml_map.items():
+        wkb_type = {
+            QgsWkbTypes.PointGeometry: QgsWkbTypes.Point,
+            QgsWkbTypes.LineGeometry: QgsWkbTypes.LineString,
+            QgsWkbTypes.PolygonGeometry: QgsWkbTypes.Polygon,
+        }.get(geom_type)
+        if wkb_type is None:
+            continue
+        uri = f"{QgsWkbTypes.displayString(wkb_type)}?crs=EPSG:4326"
+        tmp = QgsVectorLayer(uri, "_style_cache", "memory")
+        load_msg, load_ok = tmp.loadNamedStyle(qml_path)
+        if load_ok:
+            cache[geom_type] = tmp.renderer().clone()
+        elif feedback is not None:
+            feedback.reportError(f"QML読み込み失敗: {qml_path}: {load_msg}")
+    return cache
+
+
+def apply_qml_by_geom_type(
+    layer: QgsVectorLayer,
+    renderer_cache: dict[QgsWkbTypes.GeometryType, QgsFeatureRenderer],
 ) -> bool:
-    """ジオメトリタイプに対応するQMLをレイヤに直接適用する。
+    """キャッシュ済みレンダラーをレイヤに適用する。
 
     Args:
         layer: スタイルを適用するレイヤ
-        qml_map: build_qml_map() の戻り値
-        feedback: QgsProcessingFeedback（任意）
+        renderer_cache: build_renderer_cache() の戻り値
 
     Returns:
-        QMLを適用できた場合はTrue
+        レンダラーを適用できた場合はTrue
     """
     geom_type = layer.geometryType()
-    if geom_type not in qml_map:
+    if geom_type not in renderer_cache:
         return False
 
-    qml_path = qml_map[geom_type]
-    load_msg, load_ok = layer.loadNamedStyle(qml_path)
-
-    if load_ok:
-        layer.triggerRepaint()
-    else:
-        if feedback is not None:
-            feedback.reportError(f"QML読み込み失敗: {layer.name()}: {load_msg}")
-    return load_ok
+    layer.setRenderer(renderer_cache[geom_type].clone())
+    layer.triggerRepaint()
+    return True
 
 
 def apply_kandan_filter(layer: QgsVectorLayer) -> None:
