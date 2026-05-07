@@ -2,43 +2,36 @@
 class: chapter
 ---
 
-# 案件概要
+# 操作方法
 
-## 画面設計
+## プラグインのインストール
 
-本節では、画面設計について議論しない。
+### QGIS プラグインリポジトリからインストールする場合
 
-### ほげ
+メニューバーから「プラグイン」→「プラグインの管理とインストール」を選択します。
 
-以下は非常に危険なコードである[^1]。
+![プラグインのインストール](images/operation_manual/install_plugin_1.png)
 
-```python
-import os
+検索バーに「DM Converter」と入力し、検索結果から「DM Converter」を選択します。<br>
+「インストール」ボタンをクリックし、インストールが完了すると、ツールバーにプラグインのアイコンが表示されます。
 
-def dengerous():
-    """バルス"""
-    os.system('rm -rf /')
-```
+![プラグインの検索](images/operation_manual/install_plugin_2.png)
 
-[^1]: このコードは実行しないでください。
+## 入手しているプラグインの ZIP ファイルからのインストールする場合
 
-#### ほげほげ
+メニューバーから「プラグイン」→「プラグインの管理とインストール」を選択します。
 
-$1 + 1 = 200$
-*10倍だぞ10倍*
+![プラグインのインストール](images/operation_manual/install_plugin_1.png)
 
-$$ 1 * 1 / 1 * 1 / 1 * 1 = 1 $$
+左側のメニューから「ZIP からインストール」を選択し、「...」ボタンをクリックして、ダウンロードした ZIP ファイルを選択します。<br>
+ZIP ファイルの選択ができたら「インストール」ボタンをクリックします。
 
-### ふが
+![zipでインストール](images/operation_manual/install_plugin_zip.png)
 
-```mermaid-render
-graph LR
+## プラグインの起動
 
-a --> b & c --> d & e --> f
-```
+メニューまたはプロセシングツールボックスよりDM Converterを起動します。
 
-#### ふがふが
+![プラグインの起動(1)](images/operation_manual/setup_plugin_1.png)
 
-```javascript
-const hoge = 'hoge';
-```
+![プラグインの起動(2)](images/operation_manual/setup_plugin_2.png)
