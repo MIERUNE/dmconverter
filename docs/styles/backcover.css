@@ -1,0 +1,13 @@
+* {
+  text-align: center;
+  font-size: 14pt;
+}
+
+body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  text-align: center;
+}

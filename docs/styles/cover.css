@@ -1,0 +1,39 @@
+/* 表紙ページ */
+
+* {
+  text-align: center;
+  font-size: 14pt;
+}
+body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+header {
+  font-family: "Hiragino Mincho ProN";
+  flex-basis: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.title {
+  font-size: 24pt;
+  font-weight: bold;
+}
+.author {
+  margin: 3rem 0 0;
+  font-family: "Hiragino Kaku Gothic ProN", sans-serif;
+  font-weight: normal;
+}
+footer {
+  flex-basis: 30%;
+  font-family: "Hiragino Kaku Gothic ProN", sans-serif;
+  font-weight: normal;
+}
+.logo img {
+  margin: 0 0 38pt;
+  display: block;
+  width: 260pt;
+}

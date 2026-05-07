@@ -1,0 +1,51 @@
+/* 目次ページ */
+
+nav {
+  margin: 2em 2em;
+}
+
+#toc > ol {
+  padding: 0;
+  margin: 0;
+}
+
+#toc > ol > li > a {
+  font-family: "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: 12pt;
+  font-weight: 500;
+  display: block;
+  border-bottom: 1px solid #555;
+  margin: 1em 0 1em;
+  text-indent: 0;
+}
+#toc > ol > li > a::before {
+  content: target-counter(attr(href), vs-counter-chapter) ". ";
+}
+
+#toc > ol > li li a::before {
+  content: target-counter(attr(href), vs-counter-chapter) "." target-counters(attr(href), vs-counter-sections, ".", decimal) ". ";
+}
+
+#toc > ol > li > a::after {
+  content: leader(' ') target-counter(attr(href), page, var(--vs-toc--page-counter-style));
+}
+
+#toc > ol > li > ol {
+  padding: 0;
+}
+
+/* ページ右上のロゴ */
+@page {
+  @top-right {
+    content: '';
+    margin-right: -8pt;
+    width: 100pt;
+    height: var(--vs-page--margin-top);
+    background-image: url("../contents/images/logotype.svg");
+    background-color:rgba(255, 255, 255, 0.3);
+    background-blend-mode: lighten;
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: contain;
+  }
+}

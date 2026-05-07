@@ -1,0 +1,33 @@
+name: Build document
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        run: npm i -g --force corepack@latest && corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Attach doc to release
+        run: gh release upload "${{ github.event.release.tag_name }}" ./document.pdf
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,21 @@
+{
+  "name": "markdown-doc",
+  "version": "0.0.2",
+  "description": "",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "init": "vivliostyle init",
+    "build": "vivliostyle build",
+    "preview": "vivliostyle preview"
+  },
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "@vivliostyle/cli": "^10.3.1",
+    "@vivliostyle/vfm": "^2.5.0",
+    "playwright": "^1.59.1",
+    "rehype-mermaid": "^3.0.0"
+  }
+}

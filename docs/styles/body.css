@@ -1,0 +1,53 @@
+/* コードブロック */
+@import url(../themes/node_modules/@vivliostyle/theme-base/css/lib/prism/base.css);
+@import url(../themes/node_modules/@vivliostyle/theme-base/css/lib/prism/theme-prism.css);
+/* @import url(../themes/packages/@vivliostyle/theme-base/css/lib/prism/theme-okaidia.css); */
+
+:root {
+  --vs-section--h1-marker-display: initial;
+  --vs-section--h1-marker-content: counter(vs-counter-chapter) '.';
+  --vs-section--h2-marker-content: counter(vs-counter-chapter) '.' counter(vs-counter-sec-h2);
+  --vs-section--h3-marker-content: counter(vs-counter-chapter) '.' counter(vs-counter-sec-h2) '.' counter(vs-counter-sec-h3);
+  --vs-section--h4-marker-content: counter(vs-counter-chapter) '.' counter(vs-counter-sec-h2) '.' counter(vs-counter-sec-h3) '.' counter(vs-counter-sec-h4);
+  --vs-section--h5-marker-content: counter(vs-counter-chapter) '.' counter(vs-counter-sec-h2) '.' counter(vs-counter-sec-h3) '.' counter(vs-counter-sec-h4) '.' counter(vs-counter-sec-h5);
+  --vs-section--h6-marker-content: counter(vs-counter-chapter) '.' counter(vs-counter-sec-h2) '.' counter(vs-counter-sec-h3) '.' counter(vs-counter-sec-h4) '.' counter(vs-counter-sec-h5) '.' counter(vs-counter-sec-h6);
+
+  /* 表のテキストを左寄せ */
+  --vs--table-text-align: left;
+
+  /* リストのテキストを左寄せ */
+  --vs--lists-text-align: left;
+}
+
+h1 {
+  margin-bottom: 0.5em;
+}
+
+section:has(> h1:first-child) {
+  counter-increment: none !important;
+}
+section > :is(h1):first-child + * {
+  counter-reset: none !important;
+}
+
+/* ページ右上のロゴ */
+@page {
+  @top-right {
+    content: '';
+    margin-right: -8pt;
+    width: 100pt;
+    height: var(--vs-page--margin-top);
+    background-image: url("../contents/images/logotype.svg");
+    background-color:rgba(255, 255, 255, 0.3);
+    background-blend-mode: lighten;
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: contain;
+  }
+}
+
+/* ページ区切り用 */
+/* <div class="page-break"></div> を挿入した箇所でページ区切り */
+.page-break {
+  break-before: page;
+}
