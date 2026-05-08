@@ -193,9 +193,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                     if feat:
                         parent_code = str(feat.attribute("HCODE2") or "")[:2]
 
-                sg_name = CLASSIFICATIONS.get(parent_code, {}).get(
-                    "name", parent_code
-                )
+                sg_name = CLASSIFICATIONS.get(parent_code, {}).get("name", parent_code)
                 if sg_name not in sub_groups:
                     sub_groups[sg_name] = dm_group.findGroup(
                         sg_name

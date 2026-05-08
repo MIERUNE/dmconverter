@@ -273,9 +273,7 @@ def apply_kandan_filter(layer: QgsVectorLayer) -> None:
     layer.triggerRepaint()
 
 
-def export_qlr(
-    nodes: list, qlr_path: str, base_path: str | None = None
-) -> str | None:
+def export_qlr(nodes: list, qlr_path: str, base_path: str | None = None) -> str | None:
     """レイヤをQLRファイルにエクスポートする。
     Args:
         nodes: エクスポートするレイヤツリーノードのリスト
