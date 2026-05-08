@@ -18,8 +18,11 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
+from qgis.PyQt.QtCore import QCoreApplication
+
 from .constants import CLASSIFICATIONS
 from .writer.style import (
+    apply_annotation_labels,
     apply_direction_rotation,
     apply_kandan_filter,
     apply_qml_by_geom_type,
@@ -103,7 +106,9 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo(
             f"QMLマップ構築完了: {len(qml_map)}種のジオメトリタイプに対応"
         )
+        feedback.setProgress(5)
         renderer_cache = build_renderer_cache(qml_map, feedback)
+        feedback.setProgress(10)
 
         if input_gpkg:
             gpkg_files = [input_gpkg]
@@ -120,12 +125,16 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         self._gpkg_files = gpkg_files
         self._style_folder = style_folder
 
+        total_files = len(gpkg_files)
         output_qlr = ""
-        for gpkg_path in gpkg_files:
+        for i, gpkg_path in enumerate(gpkg_files):
             feedback.pushInfo(f"処理中: {gpkg_path}")
             qlr_path = self._process_gpkg(gpkg_path, renderer_cache, feedback)
             if qlr_path:
                 output_qlr = qlr_path
+            feedback.setProgress(10 + int(60 * (i + 1) / total_files))
+
+        feedback.setProgress(70)
 
         if not input_gpkg:
             return {}
@@ -154,6 +163,12 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         layer_crs = None
 
         dm_group = root.findGroup("DM") or root.insertGroup(0, "DM")
+
+        total_layers = sum(
+            len(QgsProviderRegistry.instance().querySublayers(gp))
+            for gp in self._gpkg_files
+        )
+        layer_idx = 0
 
         for gpkg_path in self._gpkg_files:
             sub_groups: dict[str, QgsLayerTreeGroup] = {}
@@ -189,7 +204,10 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 project.addMapLayer(layer, False)
                 sub_groups[sg_name].addLayer(layer)
 
-                if renderer_cache:
+                is_annotation = layer.fields().lookupField("注記内容") >= 0
+                if is_annotation:
+                    apply_annotation_labels(layer)
+                elif renderer_cache:
                     apply_qml_by_geom_type(layer, renderer_cache)
                 if layer.fields().lookupField("方向角") >= 0:
                     apply_direction_rotation(layer)
@@ -202,6 +220,12 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                         combined_extent = QgsRectangle(layer_extent)
                     else:
                         combined_extent.combineExtentWith(layer_extent)
+
+                layer_idx += 1
+                if total_layers > 0:
+                    feedback.setProgress(70 + int(30 * layer_idx / total_layers))
+                if layer_idx % 25 == 0:
+                    QCoreApplication.processEvents()
 
         if iface is None or combined_extent.isEmpty() or layer_crs is None:
             return {}
@@ -233,6 +257,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             return None
 
         temp_group = QgsLayerTreeGroup()
+        layer_refs = []  # GC防止のためPython参照を保持
         for sublayer in sublayers:
             layer_name = sublayer.name()
             uri = f"{gpkg_path}|layername={layer_name}"
@@ -242,11 +267,16 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushWarning(f"レイヤ無効: {layer_name}")
                 continue
 
-            apply_qml_by_geom_type(layer, renderer_cache)
+            is_annotation = layer.fields().lookupField("注記内容") >= 0
+            if is_annotation:
+                apply_annotation_labels(layer)
+            else:
+                apply_qml_by_geom_type(layer, renderer_cache)
             if layer.fields().lookupField("方向角") >= 0:
                 apply_direction_rotation(layer)
             apply_kandan_filter(layer)
             temp_group.addLayer(layer)
+            layer_refs.append(layer)
 
         nodes = temp_group.children()
         if not nodes:
