@@ -273,11 +273,14 @@ def apply_kandan_filter(layer: QgsVectorLayer) -> None:
     layer.triggerRepaint()
 
 
-def export_qlr(nodes: list, qlr_path: str) -> str | None:
+def export_qlr(
+    nodes: list, qlr_path: str, base_path: str | None = None
+) -> str | None:
     """レイヤをQLRファイルにエクスポートする。
     Args:
         nodes: エクスポートするレイヤツリーノードのリスト
         qlr_path: 出力するQLRファイルのパス
+        base_path: 指定した場合、QLR内のデータソースパスをこのディレクトリからの相対パスに変換する
 
     Returns:
         成功した場合はNone、失敗した場合はエラーメッセージ
@@ -285,4 +288,30 @@ def export_qlr(nodes: list, qlr_path: str) -> str | None:
     ok = QgsLayerDefinition.exportLayerDefinition(qlr_path, nodes)
     if not ok:
         return "QLRエクスポートに失敗しました"
+
+    if base_path is not None:
+        with open(qlr_path, encoding="utf-8") as f:
+            content = f.read()
+
+        def _to_relative(abs_source: str) -> str:
+            pipe_idx = abs_source.find("|")
+            file_path = abs_source[:pipe_idx] if pipe_idx >= 0 else abs_source
+            rest = abs_source[pipe_idx:] if pipe_idx >= 0 else ""
+            if os.path.isabs(file_path):
+                try:
+                    return os.path.relpath(file_path, base_path) + rest
+                except ValueError:
+                    pass
+            return abs_source
+
+        import re
+
+        content = re.sub(
+            r"(?<=<datasource>)(.*?)(?=</datasource>)",
+            lambda m: _to_relative(m.group(1)),
+            content,
+        )
+        with open(qlr_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
     return None

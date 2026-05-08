@@ -34,6 +34,7 @@ from .writer.style import (
     apply_qml_by_geom_type,
     build_qml_map,
     build_renderer_cache,
+    export_qlr,
 )
 from .writer.writer import create_merged_layers, save_to_geopackage
 
@@ -345,6 +346,16 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             feedback.setProgress(70 + int(30 * (idx + 1) / total_layers))
             if idx % 25 == 0:
                 QCoreApplication.processEvents()
+
+        # QLR出力（スタイルフォルダ指定時のみ）
+        if style_folder:
+            qlr_path = os.path.splitext(self._output_path)[0] + ".qlr"
+            nodes = dm_group.findLayers()
+            err = export_qlr(nodes, qlr_path, base_path=os.path.dirname(qlr_path))
+            if err:
+                feedback.reportError(f"QLRエクスポート失敗: {err}")
+            else:
+                feedback.pushInfo(f"QLR出力完了: {qlr_path}")
 
         # ズーム処理
         if iface is None or combined_extent.isEmpty() or layer_crs is None:

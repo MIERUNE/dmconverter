@@ -6,14 +6,19 @@ import glob
 import os
 
 from qgis.core import (
+    QgsCoordinateTransform,
+    QgsFeatureRequest,
     QgsLayerTreeGroup,
     QgsProcessingAlgorithm,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
+    QgsProject,
     QgsProviderRegistry,
+    QgsRectangle,
     QgsVectorLayer,
 )
 
+from .constants import CLASSIFICATIONS
 from .writer.style import (
     apply_direction_rotation,
     apply_kandan_filter,
@@ -65,15 +70,6 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFile(
-                self.INPUT_FOLDER,
-                "入力：GeoPackageが格納されたフォルダ",
-                behavior=QgsProcessingParameterFile.Folder,
-                optional=True,
-            )
-        )
-
-        self.addParameter(
-            QgsProcessingParameterFile(
                 self.STYLE_FOLDER,
                 "入力：スタイルフォルダ（QML）",
                 behavior=QgsProcessingParameterFile.Folder,
@@ -83,7 +79,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT_QLR,
-                "出力：QLRファイル（単一ファイルモードのみ）",
+                "出力：QLRファイル",
                 fileFilter="QGIS Layer Definition Files (*.qlr)",
                 optional=True,
             )
@@ -121,6 +117,9 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError("GeoPackageファイルまたはフォルダを指定してください")
             return {}
 
+        self._gpkg_files = gpkg_files
+        self._style_folder = style_folder
+
         output_qlr = ""
         for gpkg_path in gpkg_files:
             feedback.pushInfo(f"処理中: {gpkg_path}")
@@ -138,6 +137,87 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 output_qlr = specified
 
         return {self.OUTPUT_QLR: output_qlr} if output_qlr else {}
+
+    def postProcessAlgorithm(self, context, feedback):
+        """レイヤをプロジェクトに追加し、マップキャンバスを全体表示にズームする。"""
+        from qgis.utils import iface
+
+        if not hasattr(self, "_gpkg_files") or not hasattr(self, "_style_folder"):
+            return {}
+
+        qml_map = build_qml_map(self._style_folder, feedback)
+        renderer_cache = build_renderer_cache(qml_map, feedback)
+
+        project = QgsProject.instance()
+        root = project.layerTreeRoot()
+        combined_extent = QgsRectangle()
+        layer_crs = None
+
+        dm_group = root.findGroup("DM") or root.insertGroup(0, "DM")
+
+        for gpkg_path in self._gpkg_files:
+            sub_groups: dict[str, QgsLayerTreeGroup] = {}
+
+            sublayers = QgsProviderRegistry.instance().querySublayers(gpkg_path)
+            for sublayer in sublayers:
+                layer_name = sublayer.name()
+                uri = f"{gpkg_path}|layername={layer_name}"
+                layer = QgsVectorLayer(uri, layer_name, "ogr")
+                if not layer.isValid():
+                    feedback.pushWarning(f"レイヤ無効: {layer_name}")
+                    continue
+
+                # HCODE2フィールドの先頭2文字で分類コードを取得
+                # CLASSIFICATIONSにない場合は2文字コードをそのままグループ名に使用
+                parent_code = ""
+                hcode2_idx = layer.fields().lookupField("HCODE2")
+                if hcode2_idx >= 0:
+                    feat = next(
+                        layer.getFeatures(QgsFeatureRequest().setLimit(1)), None
+                    )
+                    if feat:
+                        parent_code = str(feat.attribute("HCODE2") or "")[:2]
+
+                sg_name = CLASSIFICATIONS.get(parent_code, {}).get(
+                    "name", parent_code
+                )
+                if sg_name not in sub_groups:
+                    sub_groups[sg_name] = dm_group.findGroup(
+                        sg_name
+                    ) or dm_group.addGroup(sg_name)
+
+                project.addMapLayer(layer, False)
+                sub_groups[sg_name].addLayer(layer)
+
+                if renderer_cache:
+                    apply_qml_by_geom_type(layer, renderer_cache)
+                if layer.fields().lookupField("方向角") >= 0:
+                    apply_direction_rotation(layer)
+                apply_kandan_filter(layer)
+
+                layer_crs = layer.crs()
+                layer_extent = layer.extent()
+                if not layer_extent.isEmpty():
+                    if combined_extent.isEmpty():
+                        combined_extent = QgsRectangle(layer_extent)
+                    else:
+                        combined_extent.combineExtentWith(layer_extent)
+
+        if iface is None or combined_extent.isEmpty() or layer_crs is None:
+            return {}
+
+        canvas = iface.mapCanvas()
+        dest_crs = canvas.mapSettings().destinationCrs()
+        if dest_crs != layer_crs:
+            transform = QgsCoordinateTransform(layer_crs, dest_crs, context.project())
+            extent = transform.transformBoundingBox(combined_extent)
+        else:
+            extent = QgsRectangle(combined_extent)
+
+        extent.scale(1.05)
+        canvas.setExtent(extent)
+        canvas.refresh()
+        return {}
 
     def _process_gpkg(
         self, gpkg_path: str, renderer_cache: dict, feedback
@@ -174,7 +254,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             return None
 
         qlr_path = os.path.splitext(gpkg_path)[0] + ".qlr"
-        err = export_qlr(nodes, qlr_path)
+        err = export_qlr(nodes, qlr_path, base_path=os.path.dirname(qlr_path))
         if err:
             feedback.reportError(f"QLRエクスポート失敗: {err}")
             return None
