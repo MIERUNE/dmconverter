@@ -30,6 +30,10 @@ export default {
       theme: ["@vivliostyle/theme-academic", "styles/body.css"],
     },
     {
+      path: "contents/chap3.md",
+      theme: ["@vivliostyle/theme-academic", "styles/body.css"],
+    },
+    {
       path: "contents/backcover.html",
       title: "裏表紙",
       theme: ["@vivliostyle/theme-base", "styles/backcover.css"],
