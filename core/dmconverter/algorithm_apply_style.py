@@ -237,8 +237,9 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             feedback.pushWarning(f"レイヤが見つかりません: {gpkg_path}")
             return None
 
+        project = QgsProject.instance()
         temp_group = QgsLayerTreeGroup()
-        layer_refs = []  # GC防止のためPython参照を保持
+        layer_ids: list[str] = []
         for sublayer in sublayers:
             layer_name = sublayer.name()
             uri = f"{gpkg_path}|layername={layer_name}"
@@ -256,16 +257,20 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             if layer.fields().lookupField("方向角") >= 0:
                 apply_direction_rotation(layer)
             apply_kandan_filter(layer)
+            # QLRエクスポートにはプロジェクト登録が必要
+            project.addMapLayer(layer, False)
+            layer_ids.append(layer.id())
             temp_group.addLayer(layer)
-            layer_refs.append(layer)
 
         nodes = temp_group.children()
         if not nodes:
             feedback.reportError(f"有効なレイヤがありません: {gpkg_path}")
+            project.removeMapLayers(layer_ids)
             return None
 
         qlr_path = os.path.splitext(gpkg_path)[0] + ".qlr"
         err = export_qlr(nodes, qlr_path, base_path=os.path.dirname(qlr_path))
+        project.removeMapLayers(layer_ids)
         if err:
             feedback.reportError(f"QLRエクスポート失敗: {err}")
             return None
