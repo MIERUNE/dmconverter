@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import glob
 import os
 
 from qgis.core import (
@@ -67,7 +66,6 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 "入力：GeoPackageファイル",
                 behavior=QgsProcessingParameterFile.File,
                 fileFilter="GeoPackage Files (*.gpkg)",
-                optional=True,
             )
         )
 
@@ -90,8 +88,11 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         input_gpkg = self.parameterAsFile(parameters, self.INPUT_GPKG, context)
-        input_folder = self.parameterAsFile(parameters, self.INPUT_FOLDER, context)
         style_folder = self.parameterAsFile(parameters, self.STYLE_FOLDER, context)
+
+        if not input_gpkg:
+            feedback.reportError("GeoPackageファイルを指定してください")
+            return {}
 
         if not style_folder:
             feedback.reportError("スタイルフォルダを指定してください")
@@ -110,34 +111,12 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         renderer_cache = build_renderer_cache(qml_map, feedback)
         feedback.setProgress(10)
 
-        if input_gpkg:
-            gpkg_files = [input_gpkg]
-        elif input_folder:
-            gpkg_files = sorted(glob.glob(os.path.join(input_folder, "*.gpkg")))
-            if not gpkg_files:
-                feedback.reportError("フォルダ内にGeoPackageファイルが見つかりません")
-                return {}
-            feedback.pushInfo(f"{len(gpkg_files)}件のGeoPackageファイルを検出")
-        else:
-            feedback.reportError("GeoPackageファイルまたはフォルダを指定してください")
-            return {}
-
-        self._gpkg_files = gpkg_files
+        self._gpkg_files = [input_gpkg]
         self._style_folder = style_folder
 
-        total_files = len(gpkg_files)
-        output_qlr = ""
-        for i, gpkg_path in enumerate(gpkg_files):
-            feedback.pushInfo(f"処理中: {gpkg_path}")
-            qlr_path = self._process_gpkg(gpkg_path, renderer_cache, feedback)
-            if qlr_path:
-                output_qlr = qlr_path
-            feedback.setProgress(10 + int(60 * (i + 1) / total_files))
-
+        feedback.pushInfo(f"処理中: {input_gpkg}")
+        output_qlr = self._process_gpkg(input_gpkg, renderer_cache, feedback) or ""
         feedback.setProgress(70)
-
-        if not input_gpkg:
-            return {}
 
         if output_qlr:
             specified = self.parameterAsFileOutput(parameters, self.OUTPUT_QLR, context)
@@ -164,16 +143,17 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
 
         dm_group = root.findGroup("DM") or root.insertGroup(0, "DM")
 
-        total_layers = sum(
-            len(QgsProviderRegistry.instance().querySublayers(gp))
+        all_sublayers = {
+            gp: QgsProviderRegistry.instance().querySublayers(gp)
             for gp in self._gpkg_files
-        )
+        }
+        total_layers = sum(len(sl) for sl in all_sublayers.values())
         layer_idx = 0
 
         for gpkg_path in self._gpkg_files:
             sub_groups: dict[str, QgsLayerTreeGroup] = {}
 
-            sublayers = QgsProviderRegistry.instance().querySublayers(gpkg_path)
+            sublayers = all_sublayers[gpkg_path]
             for sublayer in sublayers:
                 layer_name = sublayer.name()
                 uri = f"{gpkg_path}|layername={layer_name}"
@@ -193,7 +173,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                     if feat:
                         parent_code = str(feat.attribute("HCODE2") or "")[:2]
 
-                sg_name = CLASSIFICATIONS.get(parent_code, {}).get("name", parent_code)
+                sg_name = CLASSIFICATIONS.get(parent_code, {}).get("name", parent_code) or "未分類"
                 if sg_name not in sub_groups:
                     sub_groups[sg_name] = dm_group.findGroup(
                         sg_name
