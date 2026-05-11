@@ -51,3 +51,24 @@ section > :is(h1):first-child + * {
 .page-break {
   break-before: page;
 }
+
+/* 章タイトル（H1）を左寄せ */
+section.chapter > h1 {
+  text-align: left;
+}
+
+/* H2が切り替わるたびにH3カウンターをリセット */
+section:has(> h2:first-child) {
+  counter-reset: vs-counter-sec-h3 0 !important;
+}
+
+/* 表に縦線を追加 */
+table {
+  border-collapse: collapse;
+}
+th, td {
+  border: 1px solid #000;
+}
+th {
+  background-color: #f0f0f0;
+}
