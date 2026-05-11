@@ -53,8 +53,9 @@ section > :is(h1):first-child + * {
 }
 
 /* 章タイトル（H1）を左寄せ */
-section.chapter > h1 {
-  text-align: left;
+section.chapter > h1,
+.chapter h1 {
+  text-align: left !important;
 }
 
 /* H2が切り替わるたびにH3カウンターをリセット */
@@ -62,9 +63,10 @@ section:has(> h2:first-child) {
   counter-reset: vs-counter-sec-h3 0 !important;
 }
 
-/* 表に縦線を追加 */
+/* 表に縦線を追加・横幅いっぱいに */
 table {
   border-collapse: collapse;
+  min-width: 90%;
 }
 th, td {
   border: 1px solid #000;
