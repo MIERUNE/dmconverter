@@ -5,7 +5,7 @@ import rehypeMermaid from "rehype-mermaid";
 
 /** @type {import('@vivliostyle/cli').VivliostyleConfigSchema} */
 export default {
-  title: "xxxxシステム開発業務 基本設計書",
+  title: "DM Converter 操作説明書",
   author: "MIERUNE Inc.",
   size: "A4",
   language: "ja",
