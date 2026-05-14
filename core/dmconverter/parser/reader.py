@@ -27,6 +27,10 @@ def detect_encoding(path: str) -> str:
     if raw.startswith(b"\xef\xbb\xbf"):
         return "utf-8"
 
+    # 全バイトが ASCII 範囲 → 旧型式JIS
+    if all(b <= 0x7F for b in raw):
+        return "old_jis"
+
     # BOM なし → UTF-8 として検証
     try:
         raw.decode("utf-8")
