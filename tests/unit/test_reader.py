@@ -77,7 +77,17 @@ class TestReadRecords(unittest.TestCase):
             with self.subTest(dm_path=dm_path):
                 enc = detect_encoding(dm_path)
                 self.assertIsInstance(enc, str)
-                self.assertIn(enc, ("utf-8-sig", "utf-8", "cp932"))
+                self.assertIn(enc, ("utf-8-sig", "utf-8", "cp932", "old_jis"))
+
+    def test_detect_encoding_old_jis(self):
+        """全バイトがASCII範囲のファイルはold_jisと判定されること"""
+        import tempfile
+        content = b"M 08CF862 #0#8#C#F#8#6#2!!!!!! 2500\r\n"
+        with tempfile.NamedTemporaryFile(suffix=".dm", delete=False) as f:
+            f.write(content)
+            tmp_path = f.name
+        enc = detect_encoding(tmp_path)
+        self.assertEqual(enc, "old_jis")
 
 
 if __name__ == "__main__":

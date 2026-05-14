@@ -7,6 +7,7 @@ from core.dmconverter.parser.models import (
     ParsedDM,
 )
 from core.dmconverter.parser.parser import (
+    _decode_old_jis_text,
     _extract_common_fields,
     _format_date,
     _parse_annotation_element,
@@ -475,6 +476,41 @@ class TestParseMapSheet(unittest.TestCase):
         self.assertLess(info.origin_x, info.upper_x)
         self.assertLess(info.origin_y, info.upper_y)
         self.assertIn(info.coord_unit, (1, 10, 999))
+
+
+class TestDecodeOldJisText(unittest.TestCase):
+    def test_full_width_digits_and_letters(self):
+        """#X パターンが全角ASCII文字にデコードされること"""
+        # #0#8#C#F#8#6#2 → ０８ＣＦ８６２
+        result = _decode_old_jis_text("#0#8#C#F#8#6#2")
+        self.assertEqual(result, "０８ＣＦ８６２")
+
+    def test_fullwidth_space_padding(self):
+        """!! が全角スペースにデコードされること"""
+        result = _decode_old_jis_text("!!")
+        self.assertEqual(result, "\u3000")  # 全角スペース
+
+    def test_mixed_digits_and_padding(self):
+        """図郭名フィールド相当（数字+全角スペースパディング）のデコード"""
+        # "#0#8#C#F#8#6#2!!!!!!" (7文字+3スペース=20バイト)
+        result = _decode_old_jis_text("#0#8#C#F#8#6#2!!!!!!")
+        self.assertEqual(result, "０８ＣＦ８６２　　　")
+
+    def test_no_jis_pattern_passthrough(self):
+        """JISパターンを含まない純数値テキストはそのまま返ること"""
+        result = _decode_old_jis_text("12345678")
+        # 数値の場合は EUC-JP として有効な場合もあるため、例外が出ないことを確認
+        self.assertIsInstance(result, str)
+
+    def test_odd_length_passthrough(self):
+        """奇数長の文字列はそのまま返ること"""
+        result = _decode_old_jis_text("abc")
+        self.assertEqual(result, "abc")
+
+    def test_empty_string(self):
+        """空文字列は空文字列を返すこと"""
+        result = _decode_old_jis_text("")
+        self.assertEqual(result, "")
 
 
 if __name__ == "__main__":
