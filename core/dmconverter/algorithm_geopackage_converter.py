@@ -436,4 +436,3 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError(
                 f"コード表に未定義の分類コード: {', '.join(undefined)}"
             )
-
