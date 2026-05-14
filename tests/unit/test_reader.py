@@ -82,6 +82,7 @@ class TestReadRecords(unittest.TestCase):
     def test_detect_encoding_old_jis(self):
         """全バイトがASCII範囲のファイルはold_jisと判定されること"""
         import tempfile
+
         content = b"M 08CF862 #0#8#C#F#8#6#2!!!!!! 2500\r\n"
         with tempfile.NamedTemporaryFile(suffix=".dm", delete=False) as f:
             f.write(content)

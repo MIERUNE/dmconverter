@@ -335,7 +335,8 @@ def _parse_element(
     """ElementRecordを要素タイプに応じて解析する。"""
     record = elem.record.decode(_codec(encoding), errors="replace")
     coord_lines = tuple(
-        line.decode(_codec(encoding), errors="replace") for line in elem.coordinate_lines
+        line.decode(_codec(encoding), errors="replace")
+        for line in elem.coordinate_lines
     )
     element_type = record[1]
 
