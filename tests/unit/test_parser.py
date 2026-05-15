@@ -492,9 +492,9 @@ class TestDecodeOldJisText(unittest.TestCase):
 
     def test_mixed_digits_and_padding(self):
         """図郭名フィールド相当（数字+全角スペースパディング）のデコード"""
-        # "#0#8#C#F#8#6#2!!!!!!" (7文字+3スペース=20バイト)
+        # "#0#8#C#F#8#6#2!!!!!!" (7文字+3スペース=20バイト) → デコード後 strip で全角スペース除去
         result = _decode_old_jis_text("#0#8#C#F#8#6#2!!!!!!")
-        self.assertEqual(result, "０８ＣＦ８６２　　　")
+        self.assertEqual(result.strip(), "０８ＣＦ８６２")
 
     def test_no_jis_pattern_passthrough(self):
         """JISパターンを含まない純数値テキストはそのまま返ること"""

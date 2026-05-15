@@ -302,7 +302,7 @@ def _parse_annotation_element(
             text_parts.append(line[20:84])
         text = "".join(text_parts).rstrip()
         if encoding == "old_jis":
-            text = _decode_old_jis_text(text)
+            text = _decode_old_jis_text(text).rstrip()
 
         annotation = AnnotationInfo(
             orientation=orientation,
@@ -378,9 +378,10 @@ def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
     coordinate_system = _safe_int(map_sheet_id[:2])
 
     # 図郭名称: 位置11-30 (A20, 日本語含む)
-    map_name = line_a[10:30].decode(_codec(encoding), errors="replace").strip()
+    map_name = line_a[10:30].decode(_codec(encoding), errors="replace")
     if encoding == "old_jis":
         map_name = _decode_old_jis_text(map_name)
+    map_name = map_name.strip()
 
     # 地図情報レベル: 位置31-35 (I5)
     scale = _safe_int(line_a[30:35].decode("ascii", errors="replace"))
