@@ -337,15 +337,34 @@ def _parse_element_group(
     return ParsedGroup(dm_code=dm_code, elements=elements)
 
 
-def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
+def _parse_mesh_info(
+    mesh_rows: tuple[bytes, ...],
+    encoding: str,
+    index_row: bytes | None = None,
+) -> MeshInfo:
     """図郭レコード(a)からMeshInfoを抽出する。
-    1行目: M行 — 図郭名の先頭2文字が座標系番号
+
+    座標系番号の判定優先順位:
+        1. Iレコード(a)行の位置3-4（バイト2-3）
+        2. 図郭識別番号の先頭2文字（英数字8桁 かつ 1-19の場合）
+        3. 判定不能の場合はNone
     """
     line_a = mesh_rows[0]  # bytesのままスライスして日本語の位置ずれを防ぐ
 
-    # 図郭識別番号: 位置3-10 (A8)
-    map_sheet_id = line_a[2:10].decode("ascii", errors="replace").strip()
-    coordinate_system = _safe_int(map_sheet_id[:2])
+    # 優先1: Iレコード(a)行の位置3-4（バイト2-3、I2フィールド）
+    coordinate_system: int | None = None
+    if index_row is not None:
+        val = _safe_int(index_row[2:4].decode("ascii", errors="replace"))
+        if 1 <= val <= 19:
+            coordinate_system = val
+
+    # 優先2: 図郭識別番号の先頭2文字（英数字・最大8文字 かつ 先頭2文字が1-19の場合のみ有効）
+    if coordinate_system is None:
+        map_sheet_id = line_a[2:10].decode("ascii", errors="replace").strip()
+        if 2 <= len(map_sheet_id) <= 8 and map_sheet_id.isalnum():
+            val = _safe_int(map_sheet_id[:2])
+            if 1 <= val <= 19:
+                coordinate_system = val
 
     # 図郭名称: 位置11-30 (A20, 日本語含む)
     map_name = line_a[10:30].decode(encoding, errors="replace").strip()
@@ -399,7 +418,7 @@ def parse(classified: ClassifiedRecords) -> ParsedDM:
     warnings: list[str] = []
 
     enc = classified.encoding
-    mesh_info = _parse_mesh_info(classified.mesh_rows, enc)
+    mesh_info = _parse_mesh_info(classified.mesh_rows, enc, classified.index_row)
     map_sheet = _parse_map_sheet(classified.mesh_rows)
     groups = tuple(
         _parse_element_group(group, enc, warnings)

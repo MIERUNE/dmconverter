@@ -66,7 +66,7 @@ class ParsedGroup:
 class MeshInfo:
     """図郭情報（図郭レコード(a)から取得）"""
 
-    coordinate_system: int  # 座標系番号（1-19）
+    coordinate_system: int | None  # 座標系番号（1-19）、判定不能時はNone
     map_name: str  # 図名
     scale: int  # 縮尺分母
 

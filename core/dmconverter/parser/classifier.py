@@ -50,6 +50,7 @@ class ClassifiedRecords:
     mesh_rows: tuple[bytes, ...]
     element_groups: tuple[ElementGroup, ...]
     encoding: str
+    index_row: bytes | None = None  # インデックスレコード(a)行、存在しない場合はNone
 
 
 def _is_element_prefix(record: bytes) -> bool:
@@ -159,9 +160,10 @@ def _collect_mesh_rows(record_list: list[bytes]) -> tuple[bytes, ...]:
 def classify(records: Iterator[bytes], encoding: str = "cp932") -> ClassifiedRecords:
     """レコード列を分類し、構造化して返す。
 
-    2フェーズで処理する:
-        Phase 1: Mレコード（図郭レコード全行を可変長で収集）
-        Phase 2: 要素グループ（H + E + 座標行）
+    3フェーズで処理する:
+        Phase 1: Iレコード（インデックスレコード(a)行）を検出
+        Phase 2: Mレコード（図郭レコード全行を可変長で収集）
+        Phase 3: 要素グループ（H + E + 座標行）
     Args:
         records: reader.read_records() の戻り値
     Returns:
@@ -171,16 +173,26 @@ def classify(records: Iterator[bytes], encoding: str = "cp932") -> ClassifiedRec
     """
     record_list = list(records)
 
-    # --- Phase 1: Mレコード（図郭レコード）を可変長で収集 ---
-    if len(record_list) < MESH_BASE_ROWS:
+    # --- Phase 1: Iレコード（インデックスレコード(a)）を検出 ---
+    index_row = next(
+        (r for r in record_list if r.startswith(b"I ")),
+        None,
+    )
+
+    # --- Phase 2: Mレコード（図郭レコード）を可変長で収集 ---
+    m_start = next(
+        (i for i, r in enumerate(record_list) if r.startswith(b"M ")),
+        0,
+    )
+    if len(record_list) - m_start < MESH_BASE_ROWS:
         raise ValueError(
-            f"Mレコードが{MESH_BASE_ROWS}行未満です（{len(record_list)}行）"
+            f"Mレコードが{MESH_BASE_ROWS}行未満です（{len(record_list) - m_start}行）"
         )
 
-    mesh_rows = _collect_mesh_rows(record_list)
-    pos = len(mesh_rows)
+    mesh_rows = _collect_mesh_rows(record_list[m_start:])
+    pos = m_start + len(mesh_rows)
 
-    # --- Phase 2: 要素グループ（H + E + 座標行） ---
+    # --- Phase 3: 要素グループ（H + E + 座標行） ---
     element_groups: list[ElementGroup] = []
     current_header: bytes | None = None
     current_elements: list[ElementRecord] = []
@@ -257,4 +269,5 @@ def classify(records: Iterator[bytes], encoding: str = "cp932") -> ClassifiedRec
         mesh_rows=mesh_rows,
         element_groups=tuple(element_groups),
         encoding=encoding,
+        index_row=index_row,
     )

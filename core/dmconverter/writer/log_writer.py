@@ -96,7 +96,12 @@ def write_log(
 
     lines.extend(
         [
-            f"座標系: {parsed.mesh_info.coordinate_system} (EPSG:{6668 + parsed.mesh_info.coordinate_system})",
+            (
+                f"座標系: {parsed.mesh_info.coordinate_system}"
+                f" (EPSG:{6668 + parsed.mesh_info.coordinate_system})"
+                if parsed.mesh_info.coordinate_system is not None
+                else "座標系: 未判定"
+            ),
             f"図郭名: {parsed.mesh_info.map_name}",
             f"地図情報レベル: {parsed.mesh_info.scale}",
             "",

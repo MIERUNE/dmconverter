@@ -177,7 +177,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             if base_coord_system is None:
                 base_coord_system = parsed.mesh_info.coordinate_system
                 base_scale = parsed.mesh_info.scale
-            elif parsed.mesh_info.coordinate_system != base_coord_system:
+            elif (
+                parsed.mesh_info.coordinate_system is not None
+                and base_coord_system is not None
+                and parsed.mesh_info.coordinate_system != base_coord_system
+            ):
                 skipped_files.append(
                     f"{os.path.basename(dm_file)}"
                     f"(座標系{parsed.mesh_info.coordinate_system})"
@@ -198,11 +202,21 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 )
                 continue
 
+            coord_str = (
+                str(parsed.mesh_info.coordinate_system)
+                if parsed.mesh_info.coordinate_system is not None
+                else "未判定"
+            )
             feedback.pushInfo(
                 f"解析完了: {os.path.basename(dm_file)} "
                 f"{len(parsed.groups)}グループ, "
-                f"座標系{parsed.mesh_info.coordinate_system}"
+                f"座標系{coord_str}"
             )
+            if parsed.mesh_info.coordinate_system is None:
+                feedback.reportError(
+                    f"座標系を判定できませんでした。変換後にQGISでCRSを設定してください: "
+                    f"{os.path.basename(dm_file)}"
+                )
             parsed_list.append(parsed)
             feedback.setProgress(int(50 * (i + 1) / len(dm_files)))
 
