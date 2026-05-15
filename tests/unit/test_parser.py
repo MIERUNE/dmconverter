@@ -200,7 +200,7 @@ class TestParseMeshInfo(unittest.TestCase):
         """Iレコードがある場合、図郭識別番号より優先して座標系番号を取得する"""
         # 図郭識別番号は02系だがIレコードで6系を指定
         mesh_rows = self._make_mesh_rows(b"02JF613 ")
-        index_row = (b"I  6" + b" " * 80)  # 座標系6
+        index_row = b"I  6" + b" " * 80  # 座標系6
         info = _parse_mesh_info(mesh_rows, "shift_jis", index_row=index_row)
         self.assertEqual(info.coordinate_system, 6)
 
@@ -213,7 +213,7 @@ class TestParseMeshInfo(unittest.TestCase):
     def test_coordinate_system_none_when_index_record_invalid(self):
         """Iレコードの座標系が範囲外の場合、図郭識別番号にフォールバックする"""
         mesh_rows = self._make_mesh_rows(b"02JF613 ")
-        index_row = (b"I 99" + b" " * 80)  # 座標系99（無効）
+        index_row = b"I 99" + b" " * 80  # 座標系99（無効）
         info = _parse_mesh_info(mesh_rows, "shift_jis", index_row=index_row)
         # Iレコードが無効なので図郭識別番号の02系を使う
         self.assertEqual(info.coordinate_system, 2)
