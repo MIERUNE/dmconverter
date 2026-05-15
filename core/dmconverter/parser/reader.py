@@ -13,9 +13,14 @@ def detect_encoding(path: str) -> str:
 
     判定順序:
         1. UTF-8 BOM があれば utf-8（BOMはread_recordsで除去される）
-        2. BOM なしで UTF-8 としてデコードできれば utf-8
-        3. cp932 としてデコードできれば cp932
-        4. いずれも失敗した場合は ValueError
+        2. 全バイトが ASCII 範囲（0x7F以下）なら old_jis（旧型式DM の7-bit JISエンコード）
+        3. BOM なしで UTF-8 としてデコードできれば utf-8
+        4. cp932 としてデコードできれば cp932
+        5. いずれも失敗した場合は ValueError
+
+    Returns:
+        "utf-8", "old_jis", "cp932" のいずれか。
+        "old_jis" は Python の codec 名ではなく、旧型式DM専用の識別子。
 
     Raises:
         ValueError: エンコーディングを判定できない場合

@@ -496,8 +496,8 @@ class TestDecodeOldJisText(unittest.TestCase):
         result = _decode_old_jis_text("#0#8#C#F#8#6#2!!!!!!")
         self.assertEqual(result.strip(), "０８ＣＦ８６２")
 
-    def test_no_jis_pattern_passthrough(self):
-        """JISパターンを含まない純数値テキストはそのまま返ること"""
+    def test_numeric_text_returns_str(self):
+        """数値のみのテキストは文字列として返ること（EUC-JPとして変換される場合がある）"""
         result = _decode_old_jis_text("12345678")
         # 数値の場合は EUC-JP として有効な場合もあるため、例外が出ないことを確認
         self.assertIsInstance(result, str)
@@ -511,6 +511,29 @@ class TestDecodeOldJisText(unittest.TestCase):
         """空文字列は空文字列を返すこと"""
         result = _decode_old_jis_text("")
         self.assertEqual(result, "")
+
+
+class TestParseMeshInfoOldJis(unittest.TestCase):
+    # 旧型式DM 08CF862 の実際のMレコード先頭行（84バイト）
+    _MESH_ROW = (
+        b"M 08CF862 #0#8#C#F#8#6#2!!!!!! 2500?73c;T9qEZ4pK\\?^!!!!!!!!!!!!!! 2"
+        b"                 "
+    )
+
+    def test_map_name_decoded(self):
+        """old_jis エンコーディングで図郭名が正しくデコードされること"""
+        info = _parse_mesh_info((TestParseMeshInfoOldJis._MESH_ROW,), "old_jis")
+        self.assertEqual(info.map_name, "０８ＣＦ８６２")
+
+    def test_map_name_no_trailing_fullwidth_space(self):
+        """デコード後の図郭名に末尾の全角スペースが含まれないこと"""
+        info = _parse_mesh_info((TestParseMeshInfoOldJis._MESH_ROW,), "old_jis")
+        self.assertFalse(info.map_name.endswith("\u3000"))
+
+    def test_scale_parsed(self):
+        """縮尺が正しく取得されること"""
+        info = _parse_mesh_info((TestParseMeshInfoOldJis._MESH_ROW,), "old_jis")
+        self.assertEqual(info.scale, 2500)
 
 
 if __name__ == "__main__":
