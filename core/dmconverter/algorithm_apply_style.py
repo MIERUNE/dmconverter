@@ -53,7 +53,6 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         return (
             "GeoPackageにQMLスタイルを適用してQLRファイルを出力します。\n"
             "単一ファイル処理：GeoPackageファイルを指定\n"
-            "複数ファイル処理：GeoPackageが格納されたフォルダを指定\n"
         )
 
     def createInstance(self):
