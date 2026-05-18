@@ -26,6 +26,30 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _codec(encoding: str) -> str:
+    """Python の codec 名を返す。old_jis は ascii として decode する。"""
+    return "ascii" if encoding == "old_jis" else encoding
+
+
+def _decode_old_jis_text(text: str) -> str:
+    """7-bit JIS エンコードされたテキストをデコードする。
+
+    旧型式DMでは日本語を ASCII 範囲の2バイトペアで表現する。
+    各バイトに 0x80 を加算すると EUC-JP のバイト列になる。
+    奇数長や EUC-JP として不正な場合は元の文字列をそのまま返す。
+    """
+    if len(text) % 2 != 0:
+        return text
+    result = bytearray()
+    for i in range(0, len(text), 2):
+        result.append(ord(text[i]) + 0x80)
+        result.append(ord(text[i + 1]) + 0x80)
+    try:
+        return result.decode("euc-jp")
+    except (UnicodeDecodeError, ValueError):
+        return text
+
+
 def _safe_int(text: str, default: int = 0) -> int:
     """文字列を安全に整数変換する。変換できなければdefaultを返す。"""
     stripped = text.strip()
@@ -232,7 +256,10 @@ def _parse_direction_element(
 
 
 def _parse_annotation_element(
-    record: str, annotation_lines: tuple[str, ...], warnings: list[str]
+    record: str,
+    annotation_lines: tuple[str, ...],
+    warnings: list[str],
+    encoding: str = "",
 ) -> ParsedElement:
     """E7（注記）を解析する。代表点座標はE行、注記データは後続行から取得。"""
     fields = _extract_common_fields(record)
@@ -274,6 +301,8 @@ def _parse_annotation_element(
         for line in annotation_lines:
             text_parts.append(line[20:84])
         text = "".join(text_parts).rstrip()
+        if encoding == "old_jis":
+            text = _decode_old_jis_text(text).rstrip()
 
         annotation = AnnotationInfo(
             orientation=orientation,
@@ -304,9 +333,10 @@ def _parse_element(
     elem: ElementRecord, encoding: str, warnings: list[str]
 ) -> ParsedElement:
     """ElementRecordを要素タイプに応じて解析する。"""
-    record = elem.record.decode(encoding, errors="replace")
+    record = elem.record.decode(_codec(encoding), errors="replace")
     coord_lines = tuple(
-        line.decode(encoding, errors="replace") for line in elem.coordinate_lines
+        line.decode(_codec(encoding), errors="replace")
+        for line in elem.coordinate_lines
     )
     element_type = record[1]
 
@@ -314,7 +344,7 @@ def _parse_element(
         return _parse_point_element(record, warnings)
 
     if element_type == "7":
-        return _parse_annotation_element(record, coord_lines, warnings)
+        return _parse_annotation_element(record, coord_lines, warnings, encoding)
 
     parser = _COORD_LINE_PARSERS.get(element_type)
     if parser is not None:
@@ -329,7 +359,7 @@ def _parse_element_group(
     group: ElementGroup, encoding: str, warnings: list[str]
 ) -> ParsedGroup:
     """ElementGroupを解析する。"""
-    header = group.header.decode(encoding, errors="replace")
+    header = group.header.decode(_codec(encoding), errors="replace")
     dm_code = header[2:6].strip()
     elements = tuple(
         _parse_element(elem, encoding, warnings) for elem in group.elements
@@ -348,7 +378,10 @@ def _parse_mesh_info(mesh_rows: tuple[bytes, ...], encoding: str) -> MeshInfo:
     coordinate_system = _safe_int(map_sheet_id[:2])
 
     # 図郭名称: 位置11-30 (A20, 日本語含む)
-    map_name = line_a[10:30].decode(encoding, errors="replace").strip()
+    map_name = line_a[10:30].decode(_codec(encoding), errors="replace")
+    if encoding == "old_jis":
+        map_name = _decode_old_jis_text(map_name)
+    map_name = map_name.strip()
 
     # 地図情報レベル: 位置31-35 (I5)
     scale = _safe_int(line_a[30:35].decode("ascii", errors="replace"))
