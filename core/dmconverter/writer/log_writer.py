@@ -122,7 +122,6 @@ def write_log(
 
     # 分類コード別変換実績
     converted_codes = []
-    undefined_codes = []
     unsupported_codes = []
     for (et, dm_code), count in sorted(code_counter.items()):
         name = get_classification_name(dm_code)
@@ -132,7 +131,7 @@ def write_log(
                 f"  {et} {dm_code}({name}): {count}件（要素タイプ{et}({type_name})は未対応）"
             )
         elif name == dm_code:
-            undefined_codes.append(f"  {et} {dm_code}: {count}件（コード表に未定義）")
+            converted_codes.append(f"  {et} {dm_code}: {count}件")
         else:
             converted_codes.append(f"  {et} {dm_code}({name}): {count}件")
 
@@ -142,9 +141,8 @@ def write_log(
     else:
         lines.append("  (なし)")
 
-    if undefined_codes or unsupported_codes:
+    if unsupported_codes:
         lines.extend(["", "--- 未変換の分類コード ---"])
-        lines.extend(undefined_codes)
         lines.extend(unsupported_codes)
 
     # 座標なしスキップ詳細
