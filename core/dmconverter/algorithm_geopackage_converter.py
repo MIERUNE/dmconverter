@@ -301,7 +301,9 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         total_layers = len(self._layer_names)
         for idx, name in enumerate(self._layer_names):
             uri = f"{self._output_path}|layername={name}"
-            gpkg_layer = QgsVectorLayer(uri, name, "ogr")
+            _options = QgsVectorLayer.LayerOptions()
+            _options.loadDefaultStyle = False
+            gpkg_layer = QgsVectorLayer(uri, name, "ogr", _options)
 
             if not gpkg_layer.isValid():
                 feedback.pushWarning(f"レイヤ無効: {name}")
