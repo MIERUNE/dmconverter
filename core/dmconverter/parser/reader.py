@@ -5,7 +5,32 @@ DMファイルを84バイト単位で読み取り、1レコードずつ返す。
 
 from __future__ import annotations
 
+import glob
+import os
 from typing import Iterator
+
+
+def read_dmi_coordinate_system(folder: str) -> int | None:
+    """フォルダ内の.dmiファイルからインデックスレコード(a)の座標系番号を読み取る。
+
+    インデックスレコード(a)のbytes 2-4（I2フィールド）が座標系番号。
+    .dmiファイルが存在しない、または座標系番号が1-19の範囲外の場合はNoneを返す。
+    """
+    dmi_files = glob.glob(os.path.join(folder, "*.dmi")) or glob.glob(
+        os.path.join(folder, "*.DMI")
+    )
+    if not dmi_files:
+        return None
+    with open(dmi_files[0], "rb") as f:
+        first_line = f.readline()
+    if len(first_line) < 4:
+        return None
+    raw = first_line[2:4].decode("ascii", errors="replace").strip()
+    if raw.isdigit():
+        val = int(raw)
+        if 1 <= val <= 19:
+            return val
+    return None
 
 
 def detect_encoding(path: str) -> str:

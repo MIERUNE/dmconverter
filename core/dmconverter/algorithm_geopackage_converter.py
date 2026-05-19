@@ -25,7 +25,7 @@ from qgis.PyQt.QtCore import QCoreApplication
 from .constants import CLASSIFICATIONS, get_classification_name
 from .parser.classifier import classify
 from .parser.parser import parse
-from .parser.reader import detect_encoding, read_records
+from .parser.reader import detect_encoding, read_dmi_coordinate_system, read_records
 from .writer.log_writer import write_log
 from .writer.style import (
     apply_annotation_labels,
@@ -155,9 +155,18 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError("DMファイルまたはフォルダを指定してください")
             return {self.OUTPUT: output_path}
 
+        # .dmiファイルから座標系を取得（最優先）
+        dmi_coord_system: int | None = None
+        folder = os.path.dirname(os.path.abspath(dm_files[0]))
+        dmi_coord_system = read_dmi_coordinate_system(folder)
+        if dmi_coord_system is not None:
+            feedback.pushInfo(
+                f".dmiファイルから座標系を取得しました: 座標系{dmi_coord_system}"
+            )
+
         # 各ファイルを解析（座標系が異なるファイルはスキップ）
         parsed_list = []
-        base_coord_system = None
+        base_coord_system = dmi_coord_system  # .dmiがある場合は最優先で設定
         base_scale = None
         skipped_files = []
 
@@ -174,24 +183,29 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 )
                 continue
 
-            if base_coord_system is None:
-                base_coord_system = parsed.mesh_info.coordinate_system
+            if base_scale is None:
                 base_scale = parsed.mesh_info.scale
-            elif (
-                parsed.mesh_info.coordinate_system is not None
-                and base_coord_system is not None
-                and parsed.mesh_info.coordinate_system != base_coord_system
-            ):
-                skipped_files.append(
-                    f"{os.path.basename(dm_file)}"
-                    f"(座標系{parsed.mesh_info.coordinate_system})"
-                )
-                feedback.reportError(
-                    f"座標系が異なるためスキップ（基準: 座標系{base_coord_system}）: "
-                    f"{os.path.basename(dm_file)}"
-                )
-                continue
-            elif parsed.mesh_info.scale != base_scale:
+
+            # 座標系チェックは .dmi がない場合のみ実施
+            if dmi_coord_system is None:
+                if base_coord_system is None:
+                    base_coord_system = parsed.mesh_info.coordinate_system
+                elif (
+                    parsed.mesh_info.coordinate_system is not None
+                    and base_coord_system is not None
+                    and parsed.mesh_info.coordinate_system != base_coord_system
+                ):
+                    skipped_files.append(
+                        f"{os.path.basename(dm_file)}"
+                        f"(座標系{parsed.mesh_info.coordinate_system})"
+                    )
+                    feedback.reportError(
+                        f"座標系が異なるためスキップ（基準: 座標系{base_coord_system}）: "
+                        f"{os.path.basename(dm_file)}"
+                    )
+                    continue
+
+            if parsed.mesh_info.scale != base_scale:
                 skipped_files.append(
                     f"{os.path.basename(dm_file)}"
                     f"(地図情報レベル{parsed.mesh_info.scale})"
@@ -225,7 +239,9 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             return {self.OUTPUT: output_path}
 
         # レイヤ作成（複数ファイルの同名レイヤはマージ）
-        merge_result = create_merged_layers(parsed_list)
+        merge_result = create_merged_layers(
+            parsed_list, override_coord_system=dmi_coord_system
+        )
         layers = merge_result.layers
         if not layers:
             feedback.reportError("変換対象の要素がありません")
