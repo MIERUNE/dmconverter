@@ -92,28 +92,19 @@ class MergeResult:
     layer_element_types: dict[str, str] = field(default_factory=dict)
 
 
-def create_merged_layers(
-    dm_list: list[ParsedDM],
-    override_coord_system: int | None = None,
-) -> MergeResult:
+def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     """複数ParsedDMからレイヤをマージして作成する。
 
     同じ分類コード4桁×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
-    CRSはoverride_coord_systemが指定された場合はそれを使用し、
-    未指定の場合は最初のParsedDMの座標系を使用する。
+    CRSは最初のParsedDMの座標系を使用する。
     各要素のジオメトリ変換にはそれぞれのファイルのmap_sheetを使用する。
     """
     if not dm_list:
         return MergeResult()
 
     first_dm = dm_list[0]
-    coord_system = (
-        override_coord_system
-        if override_coord_system is not None
-        else first_dm.mesh_info.coordinate_system
-    )
-    if coord_system is not None:
-        epsg = get_epsg(coord_system)
+    if first_dm.mesh_info.coordinate_system is not None:
+        epsg = get_epsg(first_dm.mesh_info.coordinate_system)
         crs = QgsCoordinateReferenceSystem(f"EPSG:{epsg}")
     else:
         crs = QgsCoordinateReferenceSystem()  # CRS未設定

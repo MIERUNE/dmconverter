@@ -174,7 +174,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             feedback.pushInfo(f"読み込み中: {dm_file}")
             try:
                 classified = classify(read_records(dm_file), detect_encoding(dm_file))
-                parsed = parse(classified)
+                parsed = parse(classified, dmi_coord_system=dmi_coord_system)
             except ValueError as exc:
                 skipped_files.append(os.path.basename(dm_file))
                 feedback.reportError(
@@ -239,9 +239,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             return {self.OUTPUT: output_path}
 
         # レイヤ作成（複数ファイルの同名レイヤはマージ）
-        merge_result = create_merged_layers(
-            parsed_list, override_coord_system=dmi_coord_system
-        )
+        merge_result = create_merged_layers(parsed_list)
         layers = merge_result.layers
         if not layers:
             feedback.reportError("変換対象の要素がありません")
