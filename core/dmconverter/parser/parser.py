@@ -429,7 +429,9 @@ def parse(
 
     enc = classified.encoding
     mesh_info = _parse_mesh_info(
-        classified.mesh_rows, enc, classified.index_row,
+        classified.mesh_rows,
+        enc,
+        classified.index_row,
         dmi_coord_system=dmi_coord_system,
     )
     map_sheet = _parse_map_sheet(classified.mesh_rows)
