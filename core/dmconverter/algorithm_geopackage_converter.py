@@ -158,10 +158,11 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         # .dmiファイルから座標系を取得（最優先）
         dmi_coord_system: int | None = None
         folder = os.path.dirname(os.path.abspath(dm_files[0]))
-        dmi_coord_system = read_dmi_coordinate_system(folder)
-        if dmi_coord_system is not None:
+        dmi_info = read_dmi_coordinate_system(folder)
+        if dmi_info is not None:
+            dmi_coord_system, dmi_filename = dmi_info
             feedback.pushInfo(
-                f".dmiファイルから座標系を取得しました: 座標系{dmi_coord_system}"
+                f".dmiファイルから座標系を取得しました: {dmi_filename} → 座標系{dmi_coord_system}"
             )
 
         # 各ファイルを解析（座標系が異なるファイルはスキップ）

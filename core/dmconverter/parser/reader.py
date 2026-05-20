@@ -10,18 +10,22 @@ import os
 from typing import Iterator
 
 
-def read_dmi_coordinate_system(folder: str) -> int | None:
+def read_dmi_coordinate_system(folder: str) -> tuple[int, str] | None:
     """フォルダ内の.dmiファイルからインデックスレコード(a)の座標系番号を読み取る。
 
     インデックスレコード(a)のbytes 2-4（I2フィールド）が座標系番号。
     .dmiファイルが存在しない、または座標系番号が1-19の範囲外の場合はNoneを返す。
+
+    Returns:
+        (座標系番号, 使用した.dmiファイル名) のタプル、または None
     """
-    dmi_files = glob.glob(os.path.join(folder, "*.dmi")) or glob.glob(
-        os.path.join(folder, "*.DMI")
+    dmi_files = sorted(glob.glob(os.path.join(folder, "*.dmi"))) or sorted(
+        glob.glob(os.path.join(folder, "*.DMI"))
     )
     if not dmi_files:
         return None
-    with open(dmi_files[0], "rb") as f:
+    dmi_path = dmi_files[0]
+    with open(dmi_path, "rb") as f:
         first_line = f.readline()
     if len(first_line) < 4:
         return None
@@ -29,7 +33,7 @@ def read_dmi_coordinate_system(folder: str) -> int | None:
     if raw.isdigit():
         val = int(raw)
         if 1 <= val <= 19:
-            return val
+            return val, os.path.basename(dmi_path)
     return None
 
 
