@@ -103,8 +103,11 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         return MergeResult()
 
     first_dm = dm_list[0]
-    epsg = get_epsg(first_dm.mesh_info.coordinate_system)
-    crs = QgsCoordinateReferenceSystem(f"EPSG:{epsg}")
+    if first_dm.mesh_info.coordinate_system is not None:
+        epsg = get_epsg(first_dm.mesh_info.coordinate_system)
+        crs = QgsCoordinateReferenceSystem(f"EPSG:{epsg}")
+    else:
+        crs = QgsCoordinateReferenceSystem()  # CRS未設定
 
     # (layer_code, geom_type_name) → [(element, map_sheet)]
     groups: dict[tuple[str, str], list[tuple[ParsedElement, MapSheetInfo]]] = (
@@ -170,8 +173,8 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         if layer_name in layer_parent_codes:
             layer_name = f"{layer_name}_{layer_code}"
 
-        # メモリレイヤ作成
-        uri = f"{QgsWkbTypes.displayString(wkb_type)}?crs=EPSG:{epsg}"
+        # メモリレイヤ作成（CRS未設定の場合はURIにcrsを含めず、setCrsで設定）
+        uri = QgsWkbTypes.displayString(wkb_type)
         layer = QgsVectorLayer(uri, layer_name, "memory")
         layer.setCrs(crs)
 

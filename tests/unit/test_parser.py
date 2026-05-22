@@ -178,23 +178,46 @@ class TestParsePointElement(unittest.TestCase):
 
 
 class TestParseMeshInfo(unittest.TestCase):
-    def test_coordinate_system(self):
-        """図郭レコードから座標系番号を抽出する"""
+    def _make_mesh_rows(self, sheet_id: bytes) -> tuple:
         rec_type = b"M "  # 2 bytes
-        sheet_id = b"02JF613 "  # 8 bytes
         map_name = "杵ヶ原".encode("shift_jis").ljust(20)  # 20 bytes
         level = b" 1000"  # 5 bytes
-        line_a = rec_type + sheet_id + map_name + level
-        line_a = line_a.ljust(84)
-        mesh_rows = (
+        line_a = (rec_type + sheet_id + map_name + level).ljust(84)
+        return (
             line_a,
             b"   9000  44000  10500  46000    26332  80920  1  10500  44000   9000  46000         ",
             b"02JF602 02JF611                         02JF711 02JF702 02JF604                     ",
         )
+
+    def test_coordinate_system(self):
+        """図郭識別番号の先頭2文字から座標系番号を抽出する"""
+        mesh_rows = self._make_mesh_rows(b"02JF613 ")
         info = _parse_mesh_info(mesh_rows, "shift_jis")
         self.assertEqual(info.coordinate_system, 2)
         self.assertEqual(info.map_name, "杵ヶ原")
         self.assertEqual(info.scale, 1000)
+
+    def test_coordinate_system_from_index_record(self):
+        """Iレコードがある場合、図郭識別番号より優先して座標系番号を取得する"""
+        # 図郭識別番号は02系だがIレコードで6系を指定
+        mesh_rows = self._make_mesh_rows(b"02JF613 ")
+        index_row = b"I  6" + b" " * 80  # 座標系6
+        info = _parse_mesh_info(mesh_rows, "shift_jis", index_row=index_row)
+        self.assertEqual(info.coordinate_system, 6)
+
+    def test_coordinate_system_none_when_invalid_sheet_id(self):
+        """仕様外の図郭識別番号（先頭2文字が1-19範囲外）はNoneを返す"""
+        mesh_rows = self._make_mesh_rows(b"2914    ")
+        info = _parse_mesh_info(mesh_rows, "shift_jis")
+        self.assertIsNone(info.coordinate_system)
+
+    def test_coordinate_system_none_when_index_record_invalid(self):
+        """Iレコードの座標系が範囲外の場合、図郭識別番号にフォールバックする"""
+        mesh_rows = self._make_mesh_rows(b"02JF613 ")
+        index_row = b"I 99" + b" " * 80  # 座標系99（無効）
+        info = _parse_mesh_info(mesh_rows, "shift_jis", index_row=index_row)
+        # Iレコードが無効なので図郭識別番号の02系を使う
+        self.assertEqual(info.coordinate_system, 2)
 
 
 class TestParseAnnotationElement(unittest.TestCase):

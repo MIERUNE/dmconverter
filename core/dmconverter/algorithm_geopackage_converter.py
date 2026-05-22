@@ -25,7 +25,7 @@ from qgis.PyQt.QtCore import QCoreApplication
 from .constants import CLASSIFICATIONS, get_classification_name
 from .parser.classifier import classify
 from .parser.parser import parse
-from .parser.reader import detect_encoding, read_records
+from .parser.reader import detect_encoding, read_dmi_coordinate_system, read_records
 from .writer.log_writer import write_log
 from .writer.style import (
     apply_annotation_labels,
@@ -155,9 +155,19 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError("DMファイルまたはフォルダを指定してください")
             return {self.OUTPUT: output_path}
 
+        # .dmiファイルから座標系を取得（最優先）
+        dmi_coord_system: int | None = None
+        folder = os.path.dirname(os.path.abspath(dm_files[0]))
+        dmi_info = read_dmi_coordinate_system(folder)
+        if dmi_info is not None:
+            dmi_coord_system, dmi_filename = dmi_info
+            feedback.pushInfo(
+                f".dmiファイルから座標系を取得しました: {dmi_filename} → 座標系{dmi_coord_system}"
+            )
+
         # 各ファイルを解析（座標系が異なるファイルはスキップ）
         parsed_list = []
-        base_coord_system = None
+        base_coord_system = dmi_coord_system  # .dmiがある場合は最優先で設定
         base_scale = None
         skipped_files = []
 
@@ -165,7 +175,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             feedback.pushInfo(f"読み込み中: {dm_file}")
             try:
                 classified = classify(read_records(dm_file), detect_encoding(dm_file))
-                parsed = parse(classified)
+                parsed = parse(classified, dmi_coord_system=dmi_coord_system)
             except ValueError as exc:
                 skipped_files.append(os.path.basename(dm_file))
                 feedback.reportError(
@@ -174,20 +184,29 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 )
                 continue
 
-            if base_coord_system is None:
-                base_coord_system = parsed.mesh_info.coordinate_system
+            if base_scale is None:
                 base_scale = parsed.mesh_info.scale
-            elif parsed.mesh_info.coordinate_system != base_coord_system:
-                skipped_files.append(
-                    f"{os.path.basename(dm_file)}"
-                    f"(座標系{parsed.mesh_info.coordinate_system})"
-                )
-                feedback.reportError(
-                    f"座標系が異なるためスキップ（基準: 座標系{base_coord_system}）: "
-                    f"{os.path.basename(dm_file)}"
-                )
-                continue
-            elif parsed.mesh_info.scale != base_scale:
+
+            # 座標系チェックは .dmi がない場合のみ実施
+            if dmi_coord_system is None:
+                if base_coord_system is None:
+                    base_coord_system = parsed.mesh_info.coordinate_system
+                elif (
+                    parsed.mesh_info.coordinate_system is not None
+                    and base_coord_system is not None
+                    and parsed.mesh_info.coordinate_system != base_coord_system
+                ):
+                    skipped_files.append(
+                        f"{os.path.basename(dm_file)}"
+                        f"(座標系{parsed.mesh_info.coordinate_system})"
+                    )
+                    feedback.reportError(
+                        f"座標系が異なるためスキップ（基準: 座標系{base_coord_system}）: "
+                        f"{os.path.basename(dm_file)}"
+                    )
+                    continue
+
+            if parsed.mesh_info.scale != base_scale:
                 skipped_files.append(
                     f"{os.path.basename(dm_file)}"
                     f"(地図情報レベル{parsed.mesh_info.scale})"
@@ -198,11 +217,21 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 )
                 continue
 
+            coord_str = (
+                str(parsed.mesh_info.coordinate_system)
+                if parsed.mesh_info.coordinate_system is not None
+                else "未判定"
+            )
             feedback.pushInfo(
                 f"解析完了: {os.path.basename(dm_file)} "
                 f"{len(parsed.groups)}グループ, "
-                f"座標系{parsed.mesh_info.coordinate_system}"
+                f"座標系{coord_str}"
             )
+            if parsed.mesh_info.coordinate_system is None:
+                feedback.reportError(
+                    f"座標系を判定できませんでした。変換後にQGISでCRSを設定してください: "
+                    f"{os.path.basename(dm_file)}"
+                )
             parsed_list.append(parsed)
             feedback.setProgress(int(50 * (i + 1) / len(dm_files)))
 
