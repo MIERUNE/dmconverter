@@ -219,6 +219,12 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
                 if is_direction and len(elem.coordinates) > 2:
                     # E6で座標ペアが複数ある場合: ペアごとに複数フィーチャを生成
                     coords = elem.coordinates
+                    if len(coords) % 2 != 0:
+                        errors.append(
+                            f"{elem.element_type} {elem.dm_code} "
+                            f"要素ID={elem.element_id}: "
+                            "座標数が奇数のため末尾1点を無視します"
+                        )
                     for i in range(0, len(coords) - 1, 2):
                         pair_elem = replace(elem, coordinates=coords[i : i + 2])
                         try:
