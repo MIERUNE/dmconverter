@@ -226,14 +226,17 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
                             "座標数が奇数のため末尾1点を無視します"
                         )
                     for i in range(0, len(coords) - 1, 2):
-                        pair_elem = replace(elem, coordinates=coords[i : i + 2])
+                        pair_coords = coords[i : i + 2]
+                        pair_index = (i // 2) + 1
+                        pair_elem = replace(elem, coordinates=pair_coords)
                         try:
                             geom = geom_func(pair_elem, map_sheet)
                         except Exception as e:
                             geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
                             errors.append(
                                 f"{elem.element_type} {elem.dm_code} "
-                                f"要素ID={elem.element_id}: {e}"
+                                f"要素ID={elem.element_id} "
+                                f"pair #{pair_index} 座標={pair_coords}: {e}"
                             )
                             continue
                         if geom is None or geom.isEmpty():
