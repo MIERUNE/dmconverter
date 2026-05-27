@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -216,19 +216,38 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
             for elem, map_sheet in elem_pairs:
                 if not elem.coordinates:
                     continue
-                try:
-                    geom = geom_func(elem, map_sheet)
-                except Exception as e:
-                    geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
-                    errors.append(
-                        f"{elem.element_type} {elem.dm_code} "
-                        f"要素ID={elem.element_id}: {e}"
-                    )
-                    continue
-                if geom is None or geom.isEmpty():
-                    geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
-                    continue
-                elem_geom_pairs.append((elem, geom))
+                if is_direction and len(elem.coordinates) > 2:
+                    # E6で座標ペアが複数ある場合: ペアごとに複数フィーチャを生成
+                    coords = elem.coordinates
+                    for i in range(0, len(coords) - 1, 2):
+                        pair_elem = replace(elem, coordinates=coords[i : i + 2])
+                        try:
+                            geom = geom_func(pair_elem, map_sheet)
+                        except Exception as e:
+                            geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
+                            errors.append(
+                                f"{elem.element_type} {elem.dm_code} "
+                                f"要素ID={elem.element_id}: {e}"
+                            )
+                            continue
+                        if geom is None or geom.isEmpty():
+                            geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
+                            continue
+                        elem_geom_pairs.append((pair_elem, geom))
+                else:
+                    try:
+                        geom = geom_func(elem, map_sheet)
+                    except Exception as e:
+                        geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
+                        errors.append(
+                            f"{elem.element_type} {elem.dm_code} "
+                            f"要素ID={elem.element_id}: {e}"
+                        )
+                        continue
+                    if geom is None or geom.isEmpty():
+                        geom_fail_counter[(elem.element_type, elem.dm_code)] += 1
+                        continue
+                    elem_geom_pairs.append((elem, geom))
 
         for elem, geom in elem_geom_pairs:
             feat = QgsFeature(layer.fields())
