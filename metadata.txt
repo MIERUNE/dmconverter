@@ -6,7 +6,6 @@ about=公共測量で使用される DM ファイルを、QGISで扱いやすい
 # Version will be updated with release tag on Github workflow
 version={{PLUGIN_VERSION}}
 
-supportsQt6=True
 hasProcessingProvider=yes
 
 #Plugin main icon
