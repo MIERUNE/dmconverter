@@ -1,8 +1,10 @@
 [general]
 name=DM Converter
-qgisMinimumVersion=3.22
-description=DMファイル（日本の数値地図フォーマット）をGeoPackageに変換するQGISプラグインです。<br>単一ファイルまたはフォルダを指定した一括変換に対応し、JGD2011 平面直角座標系を自動判定します。
-about=公共測量で使用される DM ファイルを、QGISで扱いやすい GeoPackage形式に変換します。<br>面・線・円・円弧・点・方向・注記（E1〜E7）の各要素タイプに対応しています。
+qgisMinimumVersion=3.40
+qgisMaximumVersion=4.99
+description=公共測量で作成された数値地形図データ（DM）をQGISに読み込める形式に変換するプラグイン。A QGIS plugin for loading Digital Mapping (DM) data.
+about=公共測量で使用されるDMファイル（日本の数値地図フォーマット）をGeoPackage形式に変換するQGISプラグインです。単一ファイルの変換に加えて、フォルダを指定した一括変換にも対応し、JGD2011平面直角座標系を自動判定します。面・線・円・円弧・点・方向・注記（E1〜E7）の各要素タイプに対応しています。 This QGIS plugin converts DM files to GeoPackage. DM is a Japanese digital mapping format used in public surveys. It can convert a single file or all files in a selected folder, and it automatically detects the appropriate JGD2011 plane rectangular coordinate system. It supports all element types from E1 through E7, including areas, lines, circles, arcs, points, directions, and annotations.
+
 # Version will be updated with release tag on Github workflow
 version={{PLUGIN_VERSION}}
 
@@ -13,9 +15,8 @@ icon=imgs/icon.png
 
 author=MIERUNE Inc., 国際航業株式会社
 email=info@mierune.co.jp
-license=GPL-2.0-or-later
-homepage=
-tracker=
-repository=
-tags=
+homepage=https://github.com/MIERUNE/dmconverter
+tracker=https://github.com/MIERUNE/dmconverter/issues
+repository=https://github.com/MIERUNE/dmconverter
+tags=dm, processing, python
 category=
