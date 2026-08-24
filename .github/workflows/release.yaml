@@ -4,12 +4,12 @@ on:
     types: [published]
 
 env:
-  PLUGIN_NAME: qgis-plugin-template
+  PLUGIN_NAME: dmconverter
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
       # Temporarily rename metadata file whose contents are to be rewritten
       - name: rename some files to rewrite
         run: |
