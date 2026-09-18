@@ -15,12 +15,14 @@ from qgis.core import (
     QgsProviderRegistry,
     QgsRectangle,
     QgsVectorLayer,
+    QgsWkbTypes,
 )
 
 from qgis.PyQt.QtCore import QCoreApplication
 
 from .constants import CLASSIFICATIONS
 from .writer.style import (
+    QmlStyle,
     apply_layer_style,
     build_qml_map,
     build_style_cache,
@@ -220,7 +222,12 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         canvas.refresh()
         return {}
 
-    def _process_gpkg(self, gpkg_path: str, style_cache: dict, feedback) -> str | None:
+    def _process_gpkg(
+        self,
+        gpkg_path: str,
+        style_cache: dict[QgsWkbTypes.GeometryType, QmlStyle],
+        feedback,
+    ) -> str | None:
         """1つのGeoPackageにスタイルを適用してQLRを出力する。
 
         Returns:

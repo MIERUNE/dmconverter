@@ -272,15 +272,23 @@ def build_style_cache(
 def _parse_qml_document(qml_path: str) -> QDomDocument | None:
     """QMLファイルをQDomDocumentとしてパースする。
 
+    ``setContent`` の成否と、ルート要素が ``<qgis>`` であることの両方を確認する。
+    途中で途切れたXMLは setContent が失敗し、QMLでないXMLはルート要素で弾く。
+    PyQt5 の戻り値はタプル、PyQt6 は真偽値相当のため、両方を受ける。
+
+    Args:
+        qml_path: QMLファイルのパス
+
     Returns:
-        パース済みDOM。XMLとして不正な場合はNone
+        パース済みDOM。XMLとして不正、またはルート要素が <qgis> でない場合はNone
     """
     document = QDomDocument()
     with open(qml_path, "rb") as f:
         result = document.setContent(f.read())
-    # PyQt5 は (ok, errorMsg, line, column) のタプル、PyQt6 も先頭要素が成否
     ok = result[0] if isinstance(result, tuple) else bool(result)
-    return document if ok else None
+    if not ok or document.documentElement().tagName() != "qgis":
+        return None
+    return document
 
 
 def apply_qml_form(
