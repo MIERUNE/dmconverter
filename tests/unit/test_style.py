@@ -7,10 +7,13 @@ HCODE2（ValueMap）・分類コード（TextEdit, 編集不可, 更新時デフ
 """
 
 import os
+import tempfile
 import unittest
 
 from qgis.core import (
+    QgsLayerTreeGroup,
     QgsNullSymbolRenderer,
+    QgsProject,
     QgsRenderContext,
     QgsVectorLayer,
     QgsWkbTypes,
@@ -24,6 +27,7 @@ from core.dmconverter.writer.style import (
     apply_qml_form,
     build_qml_map,
     build_style_cache,
+    export_qlr,
 )
 from tests.utilities import get_qgis_app
 
@@ -73,8 +77,6 @@ class TestBuildStyleCache(unittest.TestCase):
 
     def test_parse_failure_returns_none(self):
         """壊れたXMLは _parse_qml_document が None を返す"""
-        import tempfile
-
         with tempfile.TemporaryDirectory() as tmpdir:
             broken = os.path.join(tmpdir, "broken.qml")
             with open(broken, "w", encoding="utf-8") as f:
@@ -214,3 +216,37 @@ class TestApplyLayerStyle(unittest.TestCase):
         self.assertEqual(layer.renderer().type(), "singleSymbol")
         i = layer.fields().lookupField("HCODE2")
         self.assertEqual(layer.editorWidgetSetup(i).type(), "")
+
+
+class TestExportQlrWithForm(unittest.TestCase):
+    """export_qlr: フォーム設定を適用したレイヤのQLRにフィールド設定が含まれる"""
+
+    @classmethod
+    def setUpClass(cls):
+        get_qgis_app()
+        cls.cache = build_style_cache(build_qml_map(FIXTURE_DIR))
+
+    def test_qlr_contains_form_settings(self):
+        """QLRに fieldConfiguration（ValueMap）・defaults（デフォルト式）が書き出される"""
+        layer = _make_layer(POINT_LAYER_URI, "qlr_test")
+        apply_layer_style(layer, self.cache, is_annotation=False, is_direction=False)
+        # QLRエクスポートにはプロジェクト登録が必要
+        project = QgsProject.instance()
+        project.addMapLayer(layer, False)
+        group = QgsLayerTreeGroup()
+        group.addLayer(layer)
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                qlr_path = os.path.join(tmpdir, "test.qlr")
+                self.assertIsNone(export_qlr(group.children(), qlr_path))
+                with open(qlr_path, encoding="utf-8") as f:
+                    content = f.read()
+        finally:
+            # removeMapLayers 後は layer オブジェクトに触らない（QGIS側で破棄される）
+            project.removeMapLayers([layer.id()])
+
+        self.assertIn("<fieldConfiguration", content)
+        self.assertIn('type="ValueMap"', content)
+        self.assertIn("<defaults>", content)
+        self.assertIn("left(", content)
+        self.assertIn("<editable>", content)

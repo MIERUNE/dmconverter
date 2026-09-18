@@ -64,7 +64,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     def shortHelpString(self):
         """ダイアログ右側に表示されるヘルプ文"""
         return (
-            "DMファイルをGeoPackageに変換します。どちらか一方を指定してください。スタイルフォルダを指定すると、変換後にQMLスタイルを自動適用します。\n"
+            "DMファイルをGeoPackageに変換します。どちらか一方を指定してください。スタイルフォルダを指定すると、変換後にQMLのスタイル（レンダラー）と属性フォーム設定を自動適用します。\n"
             "単一ファイル処理：DMファイルを指定\n"
             "複数ファイル処理：フォルダを指定\n\n"
         )
