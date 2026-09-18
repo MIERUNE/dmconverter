@@ -28,10 +28,7 @@ from .parser.parser import parse
 from .parser.reader import detect_encoding, read_dmi_coordinate_system, read_records
 from .writer.log_writer import write_log
 from .writer.style import (
-    apply_annotation_labels,
-    apply_direction_rotation,
-    apply_kandan_filter,
-    apply_qml_by_geom_type,
+    apply_layer_style,
     build_qml_map,
     build_style_cache,
     export_qlr,
@@ -348,22 +345,16 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             project.addMapLayer(gpkg_layer, False)
             sub_groups[group_name].addLayer(gpkg_layer)
 
-            is_annotation = self._layer_element_types.get(name) == "E7"
-            is_direction = self._layer_element_types.get(name) == "E6"
-
-            # E7注記レイヤにラベル設定を適用
-            if is_annotation:
-                apply_annotation_labels(gpkg_layer)
-
-            # E7以外にQMLスタイルを適用
-            if style_cache and not is_annotation:
-                apply_qml_by_geom_type(gpkg_layer, style_cache)
-
-            # E6方向レイヤに方向角フィールドによる回転を設定
-            if is_direction:
-                apply_direction_rotation(gpkg_layer)
-
-            apply_kandan_filter(gpkg_layer)
+            # E7: ラベル設定、それ以外: QMLレンダラー。属性フォーム設定は全レイヤに適用。
+            # E6: 方向角による回転。最後に間断フィルタ。
+            element_type = self._layer_element_types.get(name)
+            apply_layer_style(
+                gpkg_layer,
+                style_cache,
+                is_annotation=element_type == "E7",
+                is_direction=element_type == "E6",
+                feedback=feedback,
+            )
 
             layer_crs = gpkg_layer.crs()
 

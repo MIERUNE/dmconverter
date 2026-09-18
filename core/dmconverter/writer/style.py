@@ -1,7 +1,7 @@
 """レイヤスタイル設定
 
 レイヤにラベル表示などのスタイルを適用する。
-QMLスタイルの適用とQLRファイルのエクスポートも行う。
+QMLのレンダラーと属性フォーム設定の適用、QLRファイルのエクスポートも行う。
 """
 
 from __future__ import annotations
@@ -358,6 +358,39 @@ def apply_kandan_filter(layer: QgsVectorLayer) -> None:
             rule.setFilterExpression('"間断区分" = 0')
     layer.setRenderer(rule_renderer)
     layer.triggerRepaint()
+
+
+def apply_layer_style(
+    layer: QgsVectorLayer,
+    style_cache: dict[QgsWkbTypes.GeometryType, QmlStyle],
+    *,
+    is_annotation: bool,
+    is_direction: bool,
+    feedback=None,
+) -> None:
+    """レイヤ1件にDM用のスタイル一式を適用する。
+
+    処理順は固定:
+        1. 注記レイヤならラベル設定（レンダラーはNullSymbol）、それ以外はQMLのレンダラー
+        2. QMLの属性フォーム設定（注記・非注記とも）
+        3. 方向レイヤならシンボルの回転
+        4. 間断フィルタ（レンダラーをルールベースに変換するため最後）
+
+    Args:
+        layer: 対象レイヤ
+        style_cache: build_style_cache() の戻り値。空ならQML由来の設定は適用しない
+        is_annotation: E7注記レイヤかどうか
+        is_direction: E6方向レイヤかどうか
+        feedback: 警告出力先（省略可）
+    """
+    if is_annotation:
+        apply_annotation_labels(layer)
+    else:
+        apply_qml_by_geom_type(layer, style_cache)
+    apply_qml_form(layer, style_cache, feedback)
+    if is_direction:
+        apply_direction_rotation(layer)
+    apply_kandan_filter(layer)
 
 
 def export_qlr(nodes: list, qlr_path: str, base_path: str | None = None) -> str | None:

@@ -21,10 +21,7 @@ from qgis.PyQt.QtCore import QCoreApplication
 
 from .constants import CLASSIFICATIONS
 from .writer.style import (
-    apply_annotation_labels,
-    apply_direction_rotation,
-    apply_kandan_filter,
-    apply_qml_by_geom_type,
+    apply_layer_style,
     build_qml_map,
     build_style_cache,
     export_qlr,
@@ -51,7 +48,8 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return (
-            "GeoPackageにQMLスタイルを適用してQLRファイルを出力します。\n"
+            "GeoPackageにQMLのスタイル（レンダラー）と属性フォーム設定を適用して"
+            "QLRファイルを出力します。\n"
             "単一ファイル処理：GeoPackageファイルを指定\n"
         )
 
@@ -184,14 +182,13 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 project.addMapLayer(layer, False)
                 sub_groups[sg_name].addLayer(layer)
 
-                is_annotation = layer.fields().lookupField("注記内容") >= 0
-                if is_annotation:
-                    apply_annotation_labels(layer)
-                elif style_cache:
-                    apply_qml_by_geom_type(layer, style_cache)
-                if layer.fields().lookupField("方向角") >= 0:
-                    apply_direction_rotation(layer)
-                apply_kandan_filter(layer)
+                apply_layer_style(
+                    layer,
+                    style_cache,
+                    is_annotation=layer.fields().lookupField("注記内容") >= 0,
+                    is_direction=layer.fields().lookupField("方向角") >= 0,
+                    feedback=feedback,
+                )
 
                 layer_crs = layer.crs()
                 layer_extent = layer.extent()
@@ -246,14 +243,13 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushWarning(f"レイヤ無効: {layer_name}")
                 continue
 
-            is_annotation = layer.fields().lookupField("注記内容") >= 0
-            if is_annotation:
-                apply_annotation_labels(layer)
-            else:
-                apply_qml_by_geom_type(layer, style_cache)
-            if layer.fields().lookupField("方向角") >= 0:
-                apply_direction_rotation(layer)
-            apply_kandan_filter(layer)
+            apply_layer_style(
+                layer,
+                style_cache,
+                is_annotation=layer.fields().lookupField("注記内容") >= 0,
+                is_direction=layer.fields().lookupField("方向角") >= 0,
+                feedback=feedback,
+            )
             # QLRエクスポートにはプロジェクト登録が必要
             project.addMapLayer(layer, False)
             layer_ids.append(layer.id())

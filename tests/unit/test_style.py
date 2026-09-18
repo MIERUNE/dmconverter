@@ -19,6 +19,7 @@ from qgis.core import (
 from core.dmconverter.writer.style import (
     QmlStyle,
     _parse_qml_document,
+    apply_layer_style,
     apply_qml_by_geom_type,
     apply_qml_form,
     build_qml_map,
@@ -167,3 +168,49 @@ class TestApplyQmlByGeomType(unittest.TestCase):
         layer = _make_layer(LINE_LAYER_URI)
         self.assertFalse(apply_qml_by_geom_type(layer, self.cache))
         self.assertEqual(layer.renderer().type(), "singleSymbol")
+
+
+class TestApplyLayerStyle(unittest.TestCase):
+    """apply_layer_style: レイヤ1件分の処理列（ラベル/レンダラー/フォーム/回転/間断）"""
+
+    @classmethod
+    def setUpClass(cls):
+        get_qgis_app()
+        cls.cache = build_style_cache(build_qml_map(FIXTURE_DIR))
+
+    def test_annotation_layer(self):
+        """注記: ラベル有効・NullSymbol・フォーム適用の3点が揃う"""
+        layer = _make_layer(POINT_LAYER_URI)
+        apply_layer_style(layer, self.cache, is_annotation=True, is_direction=False)
+        self.assertTrue(layer.labelsEnabled())
+        self.assertEqual(layer.renderer().type(), "nullSymbol")
+        i = layer.fields().lookupField("HCODE2")
+        self.assertEqual(layer.editorWidgetSetup(i).type(), "ValueMap")
+
+    def test_regular_layer(self):
+        """非注記: QMLレンダラー + フォーム。ラベルは無効のまま"""
+        layer = _make_layer(POINT_LAYER_URI)
+        apply_layer_style(layer, self.cache, is_annotation=False, is_direction=False)
+        self.assertEqual(layer.renderer().type(), "categorizedSymbol")
+        self.assertFalse(layer.labelsEnabled())
+        i = layer.fields().lookupField("HCODE2")
+        self.assertEqual(layer.editorWidgetSetup(i).type(), "ValueMap")
+        self.assertTrue(
+            layer.editFormConfig().readOnly(layer.fields().lookupField("分類コード"))
+        )
+
+    def test_kandan_filter_runs_last_and_keeps_form(self):
+        """間断区分フィールドがあればルールベースに変換され、フォーム設定は残る"""
+        layer = _make_layer(POINT_LAYER_URI + "&field=間断区分:integer")
+        apply_layer_style(layer, self.cache, is_annotation=False, is_direction=False)
+        self.assertEqual(layer.renderer().type(), "RuleRenderer")
+        i = layer.fields().lookupField("HCODE2")
+        self.assertEqual(layer.editorWidgetSetup(i).type(), "ValueMap")
+
+    def test_empty_cache_is_safe(self):
+        """空キャッシュ（スタイルフォルダ未指定）でも例外なく動き、レンダラーは既定のまま"""
+        layer = _make_layer(POINT_LAYER_URI)
+        apply_layer_style(layer, {}, is_annotation=False, is_direction=False)
+        self.assertEqual(layer.renderer().type(), "singleSymbol")
+        i = layer.fields().lookupField("HCODE2")
+        self.assertEqual(layer.editorWidgetSetup(i).type(), "")
