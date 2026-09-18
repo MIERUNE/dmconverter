@@ -11,6 +11,7 @@ import unittest
 
 from qgis.core import (
     QgsNullSymbolRenderer,
+    QgsRenderContext,
     QgsVectorLayer,
     QgsWkbTypes,
 )
@@ -18,6 +19,7 @@ from qgis.core import (
 from core.dmconverter.writer.style import (
     QmlStyle,
     _parse_qml_document,
+    apply_qml_by_geom_type,
     apply_qml_form,
     build_qml_map,
     build_style_cache,
@@ -136,3 +138,32 @@ class TestApplyQmlForm(unittest.TestCase):
         """空キャッシュでは False"""
         layer = _make_layer(POINT_LAYER_URI)
         self.assertFalse(apply_qml_form(layer, {}))
+
+
+class TestApplyQmlByGeomType(unittest.TestCase):
+    """apply_qml_by_geom_type: QmlStyle キャッシュからレンダラーだけを適用する"""
+
+    @classmethod
+    def setUpClass(cls):
+        get_qgis_app()
+        cls.cache = build_style_cache(build_qml_map(FIXTURE_DIR))
+
+    def test_applies_categorized_renderer(self):
+        """点レイヤにカテゴリ分けレンダラー（シンボル2件）が複製される"""
+        layer = _make_layer(POINT_LAYER_URI)
+        self.assertTrue(apply_qml_by_geom_type(layer, self.cache))
+        self.assertEqual(layer.renderer().type(), "categorizedSymbol")
+        self.assertEqual(len(layer.renderer().symbols(QgsRenderContext())), 2)
+
+    def test_does_not_touch_form(self):
+        """レンダラー適用だけではフォーム設定は変わらない"""
+        layer = _make_layer(POINT_LAYER_URI)
+        apply_qml_by_geom_type(layer, self.cache)
+        i = layer.fields().lookupField("HCODE2")
+        self.assertEqual(layer.editorWidgetSetup(i).type(), "")
+
+    def test_unknown_geometry_returns_false(self):
+        """キャッシュにないジオメトリタイプは False でレンダラー未変更"""
+        layer = _make_layer(LINE_LAYER_URI)
+        self.assertFalse(apply_qml_by_geom_type(layer, self.cache))
+        self.assertEqual(layer.renderer().type(), "singleSymbol")

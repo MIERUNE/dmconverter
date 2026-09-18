@@ -26,7 +26,7 @@ from .writer.style import (
     apply_kandan_filter,
     apply_qml_by_geom_type,
     build_qml_map,
-    build_renderer_cache,
+    build_style_cache,
     export_qlr,
 )
 
@@ -107,14 +107,14 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             f"QMLマップ構築完了: {len(qml_map)}種のジオメトリタイプに対応"
         )
         feedback.setProgress(5)
-        renderer_cache = build_renderer_cache(qml_map, feedback)
+        style_cache = build_style_cache(qml_map, feedback)
         feedback.setProgress(10)
 
         self._gpkg_files = [input_gpkg]
         self._style_folder = style_folder
 
         feedback.pushInfo(f"処理中: {input_gpkg}")
-        output_qlr = self._process_gpkg(input_gpkg, renderer_cache, feedback) or ""
+        output_qlr = self._process_gpkg(input_gpkg, style_cache, feedback) or ""
         feedback.setProgress(70)
 
         if output_qlr:
@@ -133,7 +133,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         qml_map = build_qml_map(self._style_folder, feedback)
-        renderer_cache = build_renderer_cache(qml_map, feedback)
+        style_cache = build_style_cache(qml_map, feedback)
 
         project = QgsProject.instance()
         root = project.layerTreeRoot()
@@ -187,8 +187,8 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 is_annotation = layer.fields().lookupField("注記内容") >= 0
                 if is_annotation:
                     apply_annotation_labels(layer)
-                elif renderer_cache:
-                    apply_qml_by_geom_type(layer, renderer_cache)
+                elif style_cache:
+                    apply_qml_by_geom_type(layer, style_cache)
                 if layer.fields().lookupField("方向角") >= 0:
                     apply_direction_rotation(layer)
                 apply_kandan_filter(layer)
@@ -223,9 +223,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         canvas.refresh()
         return {}
 
-    def _process_gpkg(
-        self, gpkg_path: str, renderer_cache: dict, feedback
-    ) -> str | None:
+    def _process_gpkg(self, gpkg_path: str, style_cache: dict, feedback) -> str | None:
         """1つのGeoPackageにスタイルを適用してQLRを出力する。
 
         Returns:
@@ -252,7 +250,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             if is_annotation:
                 apply_annotation_labels(layer)
             else:
-                apply_qml_by_geom_type(layer, renderer_cache)
+                apply_qml_by_geom_type(layer, style_cache)
             if layer.fields().lookupField("方向角") >= 0:
                 apply_direction_rotation(layer)
             apply_kandan_filter(layer)

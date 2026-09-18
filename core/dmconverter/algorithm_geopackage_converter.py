@@ -33,7 +33,7 @@ from .writer.style import (
     apply_kandan_filter,
     apply_qml_by_geom_type,
     build_qml_map,
-    build_renderer_cache,
+    build_style_cache,
     export_qlr,
 )
 from .writer.writer import create_merged_layers, save_to_geopackage
@@ -322,10 +322,10 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         sub_groups: dict[str, QgsLayerTreeGroup] = {}
 
         style_folder = getattr(self, "_style_folder", "")
-        renderer_cache = {}
+        style_cache = {}
         if style_folder:
             qml_map = build_qml_map(style_folder, feedback)
-            renderer_cache = build_renderer_cache(qml_map, feedback)
+            style_cache = build_style_cache(qml_map, feedback)
 
         total_layers = len(self._layer_names)
         for idx, name in enumerate(self._layer_names):
@@ -356,8 +356,8 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 apply_annotation_labels(gpkg_layer)
 
             # E7以外にQMLスタイルを適用
-            if renderer_cache and not is_annotation:
-                apply_qml_by_geom_type(gpkg_layer, renderer_cache)
+            if style_cache and not is_annotation:
+                apply_qml_by_geom_type(gpkg_layer, style_cache)
 
             # E6方向レイヤに方向角フィールドによる回転を設定
             if is_direction:
