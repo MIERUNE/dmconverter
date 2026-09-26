@@ -136,6 +136,39 @@ def _compose_layer_name(data_name: str, geom_type_name: str) -> str:
     return f"{data_name}_{geom_type_name}"
 
 
+def _group_ring_polygons_by_code(
+    elem_pairs: list[tuple[ParsedElement, MapSheetInfo]],
+) -> list[tuple[ParsedElement, MapSheetInfo, list[tuple[ParsedElement, MapSheetInfo]]]]:
+    """面要素を4桁分類コードごとに分けて group_ring_polygons を適用する。
+
+    レイヤ分割の粒度が粗い場合でも、中庭線（図形区分31）は同じ4桁コードの外輪にだけ対応付ける。
+    中庭線が1件もなければ空リストを返す（呼び出し元は通常処理にフォールバック）。
+    中庭線があるコードは group_ring_polygons の結果を、無いコードは座標を持つ要素を
+    (elem, ms, []) として並べて返す（要素の欠落を防ぐ）。
+    """
+    if not any(elem.zukei_kubun == 31 for elem, _ in elem_pairs):
+        return []
+
+    by_code: dict[str, list[tuple[ParsedElement, MapSheetInfo]]] = defaultdict(list)
+    for elem, map_sheet in elem_pairs:
+        by_code[elem.dm_code].append((elem, map_sheet))
+
+    result: list[
+        tuple[ParsedElement, MapSheetInfo, list[tuple[ParsedElement, MapSheetInfo]]]
+    ] = []
+    for code_pairs in by_code.values():
+        ring_groups = group_ring_polygons(code_pairs)
+        if ring_groups:
+            result.extend(ring_groups)
+        else:
+            result.extend(
+                (elem, map_sheet, [])
+                for elem, map_sheet in code_pairs
+                if elem.coordinates
+            )
+    return result
+
+
 def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
     """ParsedDM から4桁コード単位のメモリレイヤを作成する。"""
     return create_merged_layers([dm]).layers
@@ -256,7 +289,9 @@ def create_merged_layers(
         # フィーチャ追加
         # 面(E1)に中庭線（内輪, zukei_kubun=31）が含まれる場合はリングポリゴンに変換する
         features: list[QgsFeature] = []
-        ring_groups = group_ring_polygons(elem_pairs) if geom_type_name == "面" else []
+        ring_groups = (
+            _group_ring_polygons_by_code(elem_pairs) if geom_type_name == "面" else []
+        )
 
         # (elem, geom) ペアのリストを構築
         elem_geom_pairs: list[tuple[ParsedElement, QgsGeometry]] = []

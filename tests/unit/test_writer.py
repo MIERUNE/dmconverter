@@ -6,6 +6,8 @@ tests/data/ は gitignore で空のため、ParsedDM をメモリ上で組み立
 
 import unittest
 
+from qgis.core import QgsWkbTypes
+
 from core.dmconverter.parser.models import (
     Coordinate,
     MapSheetInfo,
@@ -19,6 +21,7 @@ from core.dmconverter.writer.writer import (
     LAYER_GRANULARITY_OPTIONS,
     _compose_layer_name,
     _get_layer_name,
+    _group_ring_polygons_by_code,
     _layer_code,
     create_merged_layers,
 )
@@ -89,6 +92,23 @@ def _layer_summary(result) -> dict[str, tuple[int, str]]:
     return {
         layer.name(): (layer.featureCount(), result.layer_parent_codes[layer.name()])
         for layer in result.layers
+    }
+
+
+def _nested_polygons() -> ParsedDM:
+    """6201の大きな四角の中に3001の四角、その中に3001の中庭線（図形区分31）"""
+    return _dm(
+        _element("E1", "6201", 10, _square(0, 0, 100)),
+        _element("E1", "3001", 11, _square(20, 20, 40)),
+        _element("E1", "3001", 12, _square(30, 30, 10), zukei_kubun=31),
+    )
+
+
+def _ring_counts(layer) -> dict[int, int]:
+    """{要素識別番号: リング数（外輪1 + 内輪の数）}"""
+    return {
+        feat["要素識別番号"]: len(feat.geometry().asPolygon())
+        for feat in layer.getFeatures()
     }
 
 
@@ -248,3 +268,64 @@ class TestCreateMergedLayersGranularity(unittest.TestCase):
         empty = ParsedDM(mesh_info=MESH_INFO, map_sheet=MAP_SHEET, groups=())
         with self.assertRaises(ValueError):
             create_merged_layers([empty], "xxx")
+
+
+class TestRingPolygonsByCode(unittest.TestCase):
+    """中庭線は粒度に関係なく同じ4桁コードの外輪にだけ対応付ける"""
+
+    @classmethod
+    def setUpClass(cls):
+        get_qgis_app()
+
+    def test_code4_inner_ring_attaches_to_same_code(self):
+        by_name = {
+            layer.name(): layer
+            for layer in create_merged_layers([_nested_polygons()], "code4").layers
+        }
+        self.assertEqual(_ring_counts(by_name["普通建物_面"]), {11: 2})
+        self.assertEqual(_ring_counts(by_name["区域界_面"]), {10: 1})
+
+    def test_code2_inner_ring_does_not_attach_to_other_code(self):
+        by_name = {
+            layer.name(): layer
+            for layer in create_merged_layers([_nested_polygons()], "code2").layers
+        }
+        self.assertEqual(_ring_counts(by_name["建物_面"]), {11: 2})
+        self.assertEqual(_ring_counts(by_name["諸地・場地_面"]), {10: 1})
+
+    def test_none_inner_ring_does_not_attach_to_other_code(self):
+        (layer,) = create_merged_layers([_nested_polygons()], "none").layers
+        self.assertEqual(layer.name(), "面")
+        self.assertEqual(_ring_counts(layer), {10: 1, 11: 2})
+
+    def test_without_inner_rings_all_polygons_are_kept(self):
+        for granularity, _ in LAYER_GRANULARITY_OPTIONS:
+            with self.subTest(granularity=granularity):
+                result = create_merged_layers([_lines_and_polygons()], granularity)
+                polygon_layers = [
+                    layer
+                    for layer in result.layers
+                    if layer.geometryType() == QgsWkbTypes.PolygonGeometry
+                ]
+                self.assertEqual(
+                    sum(layer.featureCount() for layer in polygon_layers), 2
+                )
+
+    def test_helper_returns_empty_without_inner_rings(self):
+        pairs = [
+            (elem, MAP_SHEET)
+            for elem in _lines_and_polygons().groups[0].elements
+            if elem.element_type == "E1"
+        ]
+        self.assertEqual(_group_ring_polygons_by_code(pairs), [])
+
+    def test_helper_keeps_codes_without_inner_rings(self):
+        pairs = [(elem, MAP_SHEET) for elem in _nested_polygons().groups[0].elements]
+        groups = _group_ring_polygons_by_code(pairs)
+        self.assertEqual(
+            {
+                outer.element_id: [inner.element_id for inner, _ in inners]
+                for outer, _, inners in groups
+            },
+            {10: [], 11: [12]},
+        )
