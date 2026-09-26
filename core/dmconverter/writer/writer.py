@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field, replace
+from typing import Literal
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -32,6 +33,39 @@ from ..schema import (
 )
 from .crs import get_epsg
 from .geometry import direction_angle, group_ring_polygons, to_ring_polygon_geometry
+
+# レイヤ分割の粒度。code4=分類コード4桁, code2=上位2桁, none=分類コードで分けない
+LayerGranularity = Literal["code4", "code2", "none"]
+
+# (内部キー, UI表示名)。順序は Processing の Enum パラメータのインデックスに対応する
+LAYER_GRANULARITY_OPTIONS: tuple[tuple[LayerGranularity, str], ...] = (
+    ("code4", "分類コード4桁"),
+    ("code2", "分類コード2桁"),
+    ("none", "分類コードで分けない"),
+)
+DEFAULT_LAYER_GRANULARITY: LayerGranularity = "code4"
+
+
+def _layer_code(dm_code: str, granularity: LayerGranularity) -> str:
+    """粒度に応じたレイヤ分割キーを返す。
+
+    Args:
+        dm_code: 4桁分類コード
+        granularity: レイヤ分割の粒度
+
+    Returns:
+        code4 → 4桁コードそのまま、code2 → 上位2桁、none → 空文字
+
+    Raises:
+        ValueError: 未知の粒度が渡された場合
+    """
+    if granularity == "code4":
+        return dm_code
+    if granularity == "code2":
+        return dm_code[:2]
+    if granularity == "none":
+        return ""
+    raise ValueError(f"未知のレイヤ分割粒度です: {granularity!r}")
 
 
 def _build_fields() -> QgsFields:
