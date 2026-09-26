@@ -17,6 +17,8 @@ from core.dmconverter.parser.models import (
 from core.dmconverter.writer.writer import (
     DEFAULT_LAYER_GRANULARITY,
     LAYER_GRANULARITY_OPTIONS,
+    _compose_layer_name,
+    _get_layer_name,
     _layer_code,
 )
 from tests.utilities import get_qgis_app
@@ -103,3 +105,41 @@ class TestLayerGranularityDefinitions(unittest.TestCase):
     def test_layer_code_unknown_raises(self):
         with self.assertRaises(ValueError):
             _layer_code("2101", "xxx")
+
+
+class TestLayerNameHelpers(unittest.TestCase):
+    """_get_layer_name と _compose_layer_name"""
+
+    @classmethod
+    def setUpClass(cls):
+        get_qgis_app()
+
+    def test_get_layer_name_code4_known(self):
+        self.assertEqual(_get_layer_name("2101"), "道路縁(街区線)")
+
+    def test_get_layer_name_code4_zero_zero_uses_group_name(self):
+        self.assertEqual(_get_layer_name("2100"), "道路")
+
+    def test_get_layer_name_code4_unknown_data_code(self):
+        self.assertEqual(_get_layer_name("2201"), "2201")
+
+    def test_get_layer_name_code4_unknown_parent_code(self):
+        self.assertEqual(_get_layer_name("9901"), "9901")
+
+    def test_get_layer_name_code2_known(self):
+        self.assertEqual(_get_layer_name("21"), "道路")
+
+    def test_get_layer_name_code2_unknown(self):
+        self.assertEqual(_get_layer_name("99"), "99")
+
+    def test_get_layer_name_empty(self):
+        self.assertEqual(_get_layer_name(""), "")
+
+    def test_compose_with_data_name(self):
+        self.assertEqual(_compose_layer_name("道路", "線"), "道路_線")
+
+    def test_compose_same_as_geom_type(self):
+        self.assertEqual(_compose_layer_name("注記", "注記"), "注記")
+
+    def test_compose_empty_data_name(self):
+        self.assertEqual(_compose_layer_name("", "面"), "面")

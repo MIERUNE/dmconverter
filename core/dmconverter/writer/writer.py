@@ -96,18 +96,44 @@ def _build_direction_fields() -> QgsFields:
 
 
 def _get_layer_name(layer_code: str) -> str:
-    """4桁分類コードからレイヤ名を返す。"""
+    """レイヤ分割キーからレイヤ名の分類部分を返す。
+
+    Args:
+        layer_code: _layer_code() が返す分割キー（4桁 / 2桁 / 空文字）
+
+    Returns:
+        4桁: データ名（"00" はグループ名）。コード表にない場合はコードそのまま
+        2桁: グループ名。コード表にない場合はコードそのまま
+        空文字: 空文字（レイヤ名はジオメトリ種別名だけになる）
+    """
+    if not layer_code:
+        return ""
     parent_code = layer_code[:2]
-    data_code = layer_code[2:]
     group = CLASSIFICATIONS.get(parent_code)
     if group is None:
         return layer_code
+    if len(layer_code) == 2:
+        return group["name"]
+    data_code = layer_code[2:]
     if data_code == "00":
         return group["name"]
     data_name = group.get(data_code)
     if data_name is None:
         return layer_code
     return data_name
+
+
+def _compose_layer_name(data_name: str, geom_type_name: str) -> str:
+    """分類部分とジオメトリ種別名からレイヤ名を組み立てる。
+
+    分類部分が空、またはジオメトリ種別名と同じ場合はジオメトリ種別名だけを返す。
+    例: ("道路縁(街区線)", "線") → "道路縁(街区線)_線"
+        ("注記", "注記") → "注記"
+        ("", "面") → "面"
+    """
+    if not data_name or data_name == geom_type_name:
+        return geom_type_name
+    return f"{data_name}_{geom_type_name}"
 
 
 def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
