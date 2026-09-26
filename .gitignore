@@ -10,3 +10,4 @@ requirements.txt
 poetry.lock
 .ruff_cache
 tests/data/*
+.tmp/
