@@ -45,6 +45,14 @@ LAYER_GRANULARITY_OPTIONS: tuple[tuple[LayerGranularity, str], ...] = (
 )
 DEFAULT_LAYER_GRANULARITY: LayerGranularity = "code4"
 
+_GRANULARITY_KEYS = frozenset(key for key, _ in LAYER_GRANULARITY_OPTIONS)
+
+
+def _check_granularity(granularity: str) -> None:
+    """粒度キーを検証する。未知なら ValueError。"""
+    if granularity not in _GRANULARITY_KEYS:
+        raise ValueError(f"未知のレイヤ分割粒度です: {granularity!r}")
+
 
 def _layer_code(dm_code: str, granularity: LayerGranularity) -> str:
     """粒度に応じたレイヤ分割キーを返す。
@@ -59,13 +67,12 @@ def _layer_code(dm_code: str, granularity: LayerGranularity) -> str:
     Raises:
         ValueError: 未知の粒度が渡された場合
     """
-    if granularity == "code4":
-        return dm_code
+    _check_granularity(granularity)
     if granularity == "code2":
         return dm_code[:2]
     if granularity == "none":
         return ""
-    raise ValueError(f"未知のレイヤ分割粒度です: {granularity!r}")
+    return dm_code
 
 
 def _build_fields() -> QgsFields:
@@ -205,8 +212,7 @@ def create_merged_layers(
     Raises:
         ValueError: 未知の粒度が渡された場合
     """
-    if granularity not in {key for key, _ in LAYER_GRANULARITY_OPTIONS}:
-        raise ValueError(f"未知のレイヤ分割粒度です: {granularity!r}")
+    _check_granularity(granularity)
     if not dm_list:
         return MergeResult()
 

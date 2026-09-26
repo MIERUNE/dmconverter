@@ -69,7 +69,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             "単一ファイル処理：DMファイルを指定\n"
             "複数ファイル処理：フォルダを指定\n\n"
             "レイヤ分割の粒度（分類コード4桁 / 2桁 / 分けない）を選べます。"
-            "QFieldで分類コードを付け替える運用では「分けない」が便利です。\n\n"
+            "QFieldで分類コードを付け替える運用では「分けない」が便利です。"
         )
 
     def createInstance(self):
@@ -362,7 +362,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                     ) or dm_group.addGroup(group_name)
                 sub_groups[group_name].addLayer(gpkg_layer)
             else:
-                # 分類コードで分けない場合はサブグループを作らず DM 直下に置く
+                # 親コードが空文字（粒度「分けない」、または分類コードが空の不正要素）はサブグループを作らず DM 直下に置く
                 dm_group.addLayer(gpkg_layer)
 
             apply_layer_style(gpkg_layer, style_cache, feedback=feedback)

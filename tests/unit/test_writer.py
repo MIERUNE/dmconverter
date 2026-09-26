@@ -6,7 +6,7 @@ tests/data/ は gitignore で空のため、ParsedDM をメモリ上で組み立
 
 import unittest
 
-from qgis.core import QgsWkbTypes
+from qgis.core import QgsVectorLayer, QgsWkbTypes
 
 from core.dmconverter.parser.models import (
     Coordinate,
@@ -19,6 +19,7 @@ from core.dmconverter.parser.models import (
 from core.dmconverter.writer.writer import (
     DEFAULT_LAYER_GRANULARITY,
     LAYER_GRANULARITY_OPTIONS,
+    MergeResult,
     _compose_layer_name,
     _get_layer_name,
     _group_ring_polygons_by_code,
@@ -87,11 +88,20 @@ def _lines_and_polygons() -> ParsedDM:
     )
 
 
-def _layer_summary(result) -> dict[str, tuple[int, str]]:
+def _layer_summary(result: MergeResult) -> dict[str, tuple[int, str]]:
     """{レイヤ名: (フィーチャ数, 親コード)}"""
     return {
         layer.name(): (layer.featureCount(), result.layer_parent_codes[layer.name()])
         for layer in result.layers
+    }
+
+
+def _code_pairs(result: MergeResult) -> set[tuple[str, str]]:
+    """全レイヤの全フィーチャから (分類コード, HCODE2) の組を集める"""
+    return {
+        (feat["分類コード"], feat["HCODE2"])
+        for layer in result.layers
+        for feat in layer.getFeatures()
     }
 
 
@@ -104,7 +114,7 @@ def _nested_polygons() -> ParsedDM:
     )
 
 
-def _ring_counts(layer) -> dict[int, int]:
+def _ring_counts(layer: QgsVectorLayer) -> dict[int, int]:
     """{要素識別番号: リング数（外輪1 + 内輪の数）}"""
     return {
         feat["要素識別番号"]: len(feat.geometry().asPolygon())
@@ -268,6 +278,31 @@ class TestCreateMergedLayersGranularity(unittest.TestCase):
         empty = ParsedDM(mesh_info=MESH_INFO, map_sheet=MAP_SHEET, groups=())
         with self.assertRaises(ValueError):
             create_merged_layers([empty], "xxx")
+
+    def test_attributes_keep_four_digit_code_for_all_granularities(self):
+        """レイヤを粗い粒度で分けても、属性の分類コード・HCODE2は4桁由来のまま"""
+        expected = {
+            ("2101", "210100"),
+            ("2102", "210200"),
+            ("2203", "220300"),
+            ("6201", "620100"),
+            ("3001", "300100"),
+        }
+        for granularity, _ in LAYER_GRANULARITY_OPTIONS:
+            with self.subTest(granularity=granularity):
+                result = create_merged_layers([_lines_and_polygons()], granularity)
+                self.assertEqual(_code_pairs(result), expected)
+
+    def test_classification_name_is_kept_under_none(self):
+        (line_layer,) = (
+            layer
+            for layer in create_merged_layers([_lines_and_polygons()], "none").layers
+            if layer.name() == "線"
+        )
+        (feat,) = (
+            feat for feat in line_layer.getFeatures() if feat["分類コード"] == "2101"
+        )
+        self.assertEqual(feat["分類名"], "道路縁(街区線)")
 
 
 class TestRingPolygonsByCode(unittest.TestCase):
