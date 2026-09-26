@@ -27,12 +27,7 @@ from .parser.classifier import classify
 from .parser.parser import parse
 from .parser.reader import detect_encoding, read_dmi_coordinate_system, read_records
 from .writer.log_writer import write_log
-from .writer.style import (
-    apply_layer_style,
-    build_qml_map,
-    build_style_cache,
-    export_qlr,
-)
+from .writer.style import apply_layer_style, build_style_cache, export_qlr
 from .writer.writer import create_merged_layers, save_to_geopackage
 
 # 現在変換対応している要素タイプ
@@ -261,7 +256,6 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         self._output_path = output_path
         self._layer_names = [layer.name() for layer in layers]
         self._layer_parent_codes = merge_result.layer_parent_codes
-        self._layer_element_types = merge_result.layer_element_types
         self._style_folder = self.parameterAsFile(
             parameters, self.STYLE_FOLDER, context
         )
@@ -319,10 +313,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
         sub_groups: dict[str, QgsLayerTreeGroup] = {}
 
         style_folder = getattr(self, "_style_folder", "")
-        style_cache = {}
-        if style_folder:
-            qml_map = build_qml_map(style_folder, feedback)
-            style_cache = build_style_cache(qml_map, feedback)
+        style_cache = build_style_cache(style_folder, feedback) if style_folder else {}
 
         total_layers = len(self._layer_names)
         for idx, name in enumerate(self._layer_names):
@@ -345,16 +336,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             project.addMapLayer(gpkg_layer, False)
             sub_groups[group_name].addLayer(gpkg_layer)
 
-            # E7: ラベル設定、それ以外: QMLレンダラー。属性フォーム設定は全レイヤに適用。
-            # E6: 方向角による回転。最後に間断フィルタ。
-            element_type = self._layer_element_types.get(name)
-            apply_layer_style(
-                gpkg_layer,
-                style_cache,
-                is_annotation=element_type == "E7",
-                is_direction=element_type == "E6",
-                feedback=feedback,
-            )
+            apply_layer_style(gpkg_layer, style_cache, feedback=feedback)
 
             layer_crs = gpkg_layer.crs()
 

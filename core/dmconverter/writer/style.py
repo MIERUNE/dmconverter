@@ -7,7 +7,6 @@ QMLのレンダラーと属性フォーム設定の適用、QLRファイルの�
 from __future__ import annotations
 
 import os
-import xml.etree.ElementTree as ET
 from typing import NamedTuple
 
 from qgis.core import (
@@ -18,6 +17,7 @@ from qgis.core import (
     QgsNullSymbolRenderer,
     QgsPalLayerSettings,
     QgsProperty,
+    QgsReadWriteContext,
     QgsRenderContext,
     QgsRuleBasedRenderer,
     QgsSymbolLayer,
@@ -27,7 +27,7 @@ from qgis.core import (
     QgsVectorLayerSimpleLabeling,
     QgsWkbTypes,
 )
-from qgis.PyQt.QtXml import QDomDocument
+from qgis.PyQt.QtXml import QDomDocument, QDomElement
 
 # QMLのシンボルタイプ → QgsWkbTypes.GeometryType の対応
 _QML_SYMBOL_TO_GEOM_TYPE: dict[str, QgsWkbTypes.GeometryType] = {
@@ -55,6 +55,10 @@ class QmlStyle(NamedTuple):
 
     renderer: QgsFeatureRenderer
     document: QDomDocument
+
+
+# build_style_cache() の戻り値。ジオメトリタイプ別のQMLスタイル
+StyleCache = dict[QgsWkbTypes.GeometryType, QmlStyle]
 
 
 def apply_annotation_labels(layer: QgsVectorLayer) -> None:
@@ -165,35 +169,36 @@ def apply_direction_rotation(layer: QgsVectorLayer) -> None:
     layer.triggerRepaint()
 
 
-def build_qml_map(
-    style_folder: str,
-    feedback=None,
-) -> dict[QgsWkbTypes.GeometryType, str]:
-    """スタイルフォルダ内のQMLを読み込み、ジオメトリタイプ別に索引化して返す。
+def build_style_cache(style_folder: str, feedback=None) -> StyleCache:
+    """スタイルフォルダ内のQMLを読み込み、ジオメトリタイプ別にキャッシュする。
 
-    QMLのシンボルタイプ（marker/line/fill）を判定し、
-    ジオメトリタイプをキーにしたマップを返す。
-    同一ジオメトリタイプのQMLが複数ある場合は最初に見つかったものを使用する。
+    QMLはシンボルタイプ（marker/line/fill）でジオメトリタイプを判定し、
+    ファイルごとに1回だけパースする。DOMはレイヤごとの属性フォーム設定の適用に再利用する。
+    同一ジオメトリタイプのQMLが複数ある場合は、ファイル名順で最初のものを使用する。
+
+    Args:
+        style_folder: QMLファイルを置いたフォルダ
+        feedback: エラー・警告出力先（省略可）
 
     Returns:
-        {QgsWkbTypes.GeometryType: qml_path} の辞書
+        {QgsWkbTypes.GeometryType: QmlStyle} の辞書
     """
     if not os.path.isdir(style_folder):
         if feedback is not None:
             feedback.reportError(f"スタイルフォルダが見つかりません: {style_folder}")
         return {}
 
-    qml_map: dict[QgsWkbTypes.GeometryType, str] = {}
+    cache: StyleCache = {}
     for fname in sorted(os.listdir(style_folder)):
         if not fname.lower().endswith(".qml"):
             continue
-        qml_path = os.path.join(style_folder, fname)
-        try:
-            geom_type = _detect_qml_geom_type(qml_path)
-        except ET.ParseError:
+        document = _parse_qml_document(os.path.join(style_folder, fname))
+        if document is None:
             if feedback is not None:
                 feedback.reportError(f"QMLの解析に失敗（スキップ）: {fname}")
             continue
+        renderer_element = document.documentElement().firstChildElement("renderer-v2")
+        geom_type = _detect_qml_geom_type(renderer_element)
         if geom_type is None:
             if feedback is not None:
                 feedback.pushWarning(
@@ -201,149 +206,41 @@ def build_qml_map(
                     " — HCODE2フィールドでカテゴリ分類されたQMLを配置してください"
                 )
             continue
-        if geom_type not in qml_map:
-            qml_map[geom_type] = qml_path
-    return qml_map
-
-
-def _detect_qml_geom_type(qml_path: str) -> QgsWkbTypes.GeometryType | None:
-    """QMLファイルのシンボルタイプからジオメトリタイプを検出する。
-
-    Raises:
-        ET.ParseError: QMLファイルが不正なXMLの場合
-    """
-    tree = ET.parse(qml_path)
-    root = tree.getroot()
-    renderer = root.find(".//renderer-v2[@type='categorizedSymbol']")
-    if renderer is None:
-        return None
-    symbol = renderer.find(".//symbols/symbol")
-    if symbol is None:
-        return None
-    return _QML_SYMBOL_TO_GEOM_TYPE.get(symbol.get("type", ""))
-
-
-def build_style_cache(
-    qml_map: dict[QgsWkbTypes.GeometryType, str],
-    feedback=None,
-) -> dict[QgsWkbTypes.GeometryType, QmlStyle]:
-    """QMLを1回だけパースし、レンダラーとパース済みDOMをジオメトリタイプ別にキャッシュする。
-
-    DOMはレイヤごとの属性フォーム設定の適用（apply_qml_form）に再利用する。
-    QMLファイルの読み込み・パースはジオメトリタイプごとに1回で済む。
-
-    Args:
-        qml_map: build_qml_map() の戻り値
-        feedback: エラー出力先（省略可）
-
-    Returns:
-        {QgsWkbTypes.GeometryType: QmlStyle} の辞書
-    """
-    cache: dict[QgsWkbTypes.GeometryType, QmlStyle] = {}
-    for geom_type, qml_path in qml_map.items():
-        wkb_type = {
-            QgsWkbTypes.PointGeometry: QgsWkbTypes.Point,
-            QgsWkbTypes.LineGeometry: QgsWkbTypes.LineString,
-            QgsWkbTypes.PolygonGeometry: QgsWkbTypes.Polygon,
-        }.get(geom_type)
-        if wkb_type is None:
+        if geom_type in cache:
             continue
-
-        document = _parse_qml_document(qml_path)
-        if document is None:
+        renderer = QgsFeatureRenderer.load(renderer_element, QgsReadWriteContext())
+        if renderer is None:
             if feedback is not None:
-                feedback.reportError(
-                    f"QMLの解析に失敗（スキップ）: {os.path.basename(qml_path)}"
-                )
+                feedback.reportError(f"QML読み込み失敗: {fname}")
             continue
-
-        uri = f"{QgsWkbTypes.displayString(wkb_type)}?crs=EPSG:4326"
-        tmp = QgsVectorLayer(uri, "_style_cache", "memory")
-        load_ok, load_msg = tmp.importNamedStyle(document)
-        if load_ok:
-            cache[geom_type] = QmlStyle(
-                renderer=tmp.renderer().clone(), document=document
-            )
-        elif feedback is not None:
-            feedback.reportError(f"QML読み込み失敗: {qml_path}: {load_msg}")
+        cache[geom_type] = QmlStyle(renderer=renderer, document=document)
     return cache
 
 
 def _parse_qml_document(qml_path: str) -> QDomDocument | None:
     """QMLファイルをQDomDocumentとしてパースする。
 
-    ``setContent`` の成否と、ルート要素が ``<qgis>`` であることの両方を確認する。
-    途中で途切れたXMLは setContent が失敗し、QMLでないXMLはルート要素で弾く。
-    PyQt5 の戻り値はタプル、PyQt6 は真偽値相当のため、両方を受ける。
-
-    Args:
-        qml_path: QMLファイルのパス
+    PyQt5 の ``setContent`` はタプル、PyQt6 は真偽値相当を返すため、両方を受ける。
 
     Returns:
-        パース済みDOM。XMLとして不正、またはルート要素が <qgis> でない場合はNone
+        パース済みDOM。XMLとして不正な場合はNone
     """
     document = QDomDocument()
     with open(qml_path, "rb") as f:
         result = document.setContent(f.read())
     ok = result[0] if isinstance(result, tuple) else bool(result)
-    if not ok or document.documentElement().tagName() != "qgis":
+    return document if ok else None
+
+
+def _detect_qml_geom_type(renderer: QDomElement) -> QgsWkbTypes.GeometryType | None:
+    """QMLの <renderer-v2> 要素のシンボルタイプからジオメトリタイプを検出する。
+
+    カテゴリ分類レンダラーでない場合、またはシンボルが無い場合はNone。
+    """
+    if renderer.attribute("type") != "categorizedSymbol":
         return None
-    return document
-
-
-def apply_qml_form(
-    layer: QgsVectorLayer,
-    style_cache: dict[QgsWkbTypes.GeometryType, QmlStyle],
-    feedback=None,
-) -> bool:
-    """キャッシュ済みQMLから属性フォーム設定（Fields / Forms）だけをレイヤに適用する。
-
-    ウィジェット種別・別名・デフォルト値式・制約・編集可否・labelOnTop などを取り込む。
-    レンダラーやラベル設定には影響しない。
-    QMLにあってレイヤに存在しないフィールドの設定はQGIS側で無視される。
-
-    Args:
-        layer: 適用先レイヤ
-        style_cache: build_style_cache() の戻り値
-        feedback: 警告出力先（省略可）
-
-    Returns:
-        フォーム設定を適用できた場合はTrue
-    """
-    geom_type = layer.geometryType()
-    if geom_type not in style_cache:
-        return False
-
-    ok, msg = layer.importNamedStyle(
-        style_cache[geom_type].document, _FORM_STYLE_CATEGORIES
-    )
-    if not ok:
-        if feedback is not None:
-            feedback.pushWarning(f"属性フォーム適用失敗: {layer.name()}: {msg}")
-        return False
-    return True
-
-
-def apply_qml_by_geom_type(
-    layer: QgsVectorLayer,
-    style_cache: dict[QgsWkbTypes.GeometryType, QmlStyle],
-) -> bool:
-    """キャッシュ済みQMLのレンダラーをレイヤに適用する。
-
-    Args:
-        layer: スタイルを適用するレイヤ
-        style_cache: build_style_cache() の戻り値
-
-    Returns:
-        レンダラーを適用できた場合はTrue
-    """
-    geom_type = layer.geometryType()
-    if geom_type not in style_cache:
-        return False
-
-    layer.setRenderer(style_cache[geom_type].renderer.clone())
-    layer.triggerRepaint()
-    return True
+    symbol = renderer.firstChildElement("symbols").firstChildElement("symbol")
+    return _QML_SYMBOL_TO_GEOM_TYPE.get(symbol.attribute("type"))
 
 
 def apply_kandan_filter(layer: QgsVectorLayer) -> None:
@@ -369,34 +266,37 @@ def apply_kandan_filter(layer: QgsVectorLayer) -> None:
 
 
 def apply_layer_style(
-    layer: QgsVectorLayer,
-    style_cache: dict[QgsWkbTypes.GeometryType, QmlStyle],
-    *,
-    is_annotation: bool,
-    is_direction: bool,
-    feedback=None,
+    layer: QgsVectorLayer, style_cache: StyleCache, feedback=None
 ) -> None:
     """レイヤ1件にDM用のスタイル一式を適用する。
 
+    注記レイヤ・方向レイヤはフィールドの有無（注記内容 / 方向角）で判定する。
     処理順は固定:
         1. 注記レイヤならラベル設定（レンダラーはNullSymbol）、それ以外はQMLのレンダラー
-        2. QMLの属性フォーム設定（注記・非注記とも）
+        2. QMLの属性フォーム設定（Fields / Forms のみ。注記・非注記とも）
+           QMLにあってレイヤに存在しないフィールドの設定はQGIS側で無視される
         3. 方向レイヤならシンボルの回転
         4. 間断フィルタ（レンダラーをルールベースに変換するため最後）
 
     Args:
         layer: 対象レイヤ
-        style_cache: build_style_cache() の戻り値。空ならQML由来の設定は適用しない
-        is_annotation: E7注記レイヤかどうか
-        is_direction: E6方向レイヤかどうか
+        style_cache: build_style_cache() の戻り値。レイヤのジオメトリタイプが
+            未登録ならQML由来の設定は適用しない
         feedback: 警告出力先（省略可）
     """
-    if is_annotation:
+    fields = layer.fields()
+    style = style_cache.get(layer.geometryType())
+
+    if fields.indexFromName("注記内容") >= 0:
         apply_annotation_labels(layer)
-    else:
-        apply_qml_by_geom_type(layer, style_cache)
-    apply_qml_form(layer, style_cache, feedback)
-    if is_direction:
+    elif style is not None:
+        layer.setRenderer(style.renderer.clone())
+        layer.triggerRepaint()
+    if style is not None:
+        ok, msg = layer.importNamedStyle(style.document, _FORM_STYLE_CATEGORIES)
+        if not ok and feedback is not None:
+            feedback.pushWarning(f"属性フォーム適用失敗: {layer.name()}: {msg}")
+    if fields.indexFromName("方向角") >= 0:
         apply_direction_rotation(layer)
     apply_kandan_filter(layer)
 

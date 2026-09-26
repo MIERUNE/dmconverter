@@ -15,16 +15,14 @@ from qgis.core import (
     QgsProviderRegistry,
     QgsRectangle,
     QgsVectorLayer,
-    QgsWkbTypes,
 )
 
 from qgis.PyQt.QtCore import QCoreApplication
 
 from .constants import CLASSIFICATIONS
 from .writer.style import (
-    QmlStyle,
+    StyleCache,
     apply_layer_style,
-    build_qml_map,
     build_style_cache,
     export_qlr,
 )
@@ -97,17 +95,15 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError("スタイルフォルダを指定してください")
             return {}
 
-        qml_map = build_qml_map(style_folder, feedback)
-        if not qml_map:
+        style_cache = build_style_cache(style_folder, feedback)
+        if not style_cache:
             feedback.reportError(
                 "スタイルフォルダ内に有効なQMLファイルが見つかりません"
             )
             return {}
         feedback.pushInfo(
-            f"QMLマップ構築完了: {len(qml_map)}種のジオメトリタイプに対応"
+            f"QMLスタイル読み込み完了: {len(style_cache)}種のジオメトリタイプに対応"
         )
-        feedback.setProgress(5)
-        style_cache = build_style_cache(qml_map, feedback)
         feedback.setProgress(10)
 
         self._gpkg_files = [input_gpkg]
@@ -132,8 +128,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
         if not hasattr(self, "_gpkg_files") or not hasattr(self, "_style_folder"):
             return {}
 
-        qml_map = build_qml_map(self._style_folder, feedback)
-        style_cache = build_style_cache(qml_map, feedback)
+        style_cache = build_style_cache(self._style_folder, feedback)
 
         project = QgsProject.instance()
         root = project.layerTreeRoot()
@@ -184,13 +179,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 project.addMapLayer(layer, False)
                 sub_groups[sg_name].addLayer(layer)
 
-                apply_layer_style(
-                    layer,
-                    style_cache,
-                    is_annotation=layer.fields().lookupField("注記内容") >= 0,
-                    is_direction=layer.fields().lookupField("方向角") >= 0,
-                    feedback=feedback,
-                )
+                apply_layer_style(layer, style_cache, feedback=feedback)
 
                 layer_crs = layer.crs()
                 layer_extent = layer.extent()
@@ -225,7 +214,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
     def _process_gpkg(
         self,
         gpkg_path: str,
-        style_cache: dict[QgsWkbTypes.GeometryType, QmlStyle],
+        style_cache: StyleCache,
         feedback,
     ) -> str | None:
         """1つのGeoPackageにスタイルを適用してQLRを出力する。
@@ -250,13 +239,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushWarning(f"レイヤ無効: {layer_name}")
                 continue
 
-            apply_layer_style(
-                layer,
-                style_cache,
-                is_annotation=layer.fields().lookupField("注記内容") >= 0,
-                is_direction=layer.fields().lookupField("方向角") >= 0,
-                feedback=feedback,
-            )
+            apply_layer_style(layer, style_cache, feedback=feedback)
             # QLRエクスポートにはプロジェクト登録が必要
             project.addMapLayer(layer, False)
             layer_ids.append(layer.id())

@@ -13,7 +13,6 @@ import unittest
 from qgis.core import (
     QgsLayerDefinition,
     QgsLayerTreeGroup,
-    QgsNullSymbolRenderer,
     QgsProject,
     QgsRenderContext,
     QgsSymbolLayer,
@@ -23,18 +22,14 @@ from qgis.core import (
 
 from core.dmconverter.writer.style import (
     QmlStyle,
-    _parse_qml_document,
+    StyleCache,
     apply_layer_style,
-    apply_qml_by_geom_type,
-    apply_qml_form,
-    build_qml_map,
     build_style_cache,
     export_qlr,
 )
 from tests.utilities import get_qgis_app
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
-POINT_QML = os.path.join(FIXTURE_DIR, "point_form_test.qml")
 
 # フィクスチャQMLが設定を持つ3フィールド + QMLに存在しない1フィールド（独自列）
 POINT_LAYER_URI = (
@@ -44,7 +39,10 @@ POINT_LAYER_URI = (
     "&field=字の大きさ:integer"
     "&field=独自列:string"
 )
-# フィクスチャには線用QMLがないため、キャッシュに存在しないジオメトリタイプとして使う
+# 注記レイヤ・方向レイヤは判定用フィールドの有無で識別される
+ANNOTATION_LAYER_URI = POINT_LAYER_URI + "&field=注記内容:string"
+DIRECTION_LAYER_URI = POINT_LAYER_URI + "&field=方向角:double"
+# キャッシュには点用QMLしかないため、cache-miss のジオメトリタイプとして使う
 LINE_LAYER_URI = "LineString?crs=EPSG:6677&field=HCODE2:string"
 
 
@@ -54,18 +52,39 @@ def _make_layer(uri: str, name: str = "test") -> QgsVectorLayer:
     return layer
 
 
-def _point_cache():
-    """点用フィクスチャQMLだけから構築したキャッシュ（他のフィクスチャ追加に影響されない）"""
-    return build_style_cache({QgsWkbTypes.PointGeometry: POINT_QML})
+def _point_cache() -> StyleCache:
+    """点用エントリだけのキャッシュ（線・面フィクスチャが追加されても cache-miss テストが壊れない）"""
+    cache = build_style_cache(FIXTURE_DIR)
+    return {QgsWkbTypes.PointGeometry: cache[QgsWkbTypes.PointGeometry]}
 
 
-class TestBuildStyleCache(unittest.TestCase):
-    """build_style_cache: QMLをジオメトリタイプ別にレンダラー+DOMでキャッシュする"""
+def _widget_type(layer: QgsVectorLayer, field_name: str) -> str:
+    return layer.editorWidgetSetup(layer.fields().lookupField(field_name)).type()
+
+
+def _write_qml(folder: str, name: str, content: str) -> None:
+    with open(os.path.join(folder, name), "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+class _PointCacheTestCase(unittest.TestCase):
+    """点用キャッシュを使うテストの基底クラス。キャッシュはクラスごとに独立に構築する"""
+
+    cache: StyleCache
 
     @classmethod
     def setUpClass(cls):
         get_qgis_app()
-        cls.cache = build_style_cache(build_qml_map(FIXTURE_DIR))
+        cls.cache = _point_cache()
+
+
+class TestBuildStyleCache(unittest.TestCase):
+    """build_style_cache: フォルダ内のQMLをジオメトリタイプ別にレンダラー+DOMでキャッシュする"""
+
+    @classmethod
+    def setUpClass(cls):
+        get_qgis_app()
+        cls.cache = build_style_cache(FIXTURE_DIR)
 
     def test_point_entry_is_qml_style(self):
         """点用QMLが点ジオメトリのキーで QmlStyle として登録される"""
@@ -83,39 +102,45 @@ class TestBuildStyleCache(unittest.TestCase):
         document = self.cache[QgsWkbTypes.PointGeometry].document
         self.assertEqual(document.documentElement().tagName(), "qgis")
 
-    def test_parse_failure_returns_none(self):
-        """壊れたXMLは _parse_qml_document が None を返す"""
+    def test_missing_folder_returns_empty(self):
+        """存在しないフォルダは空のキャッシュ"""
+        self.assertEqual(build_style_cache(os.path.join(FIXTURE_DIR, "nope")), {})
+
+    def test_broken_xml_is_skipped(self):
+        """壊れたXMLはスキップされ、キャッシュに入らない"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            broken = os.path.join(tmpdir, "broken.qml")
-            with open(broken, "w", encoding="utf-8") as f:
-                f.write("<qgis><renderer-v2>")
-            self.assertIsNone(_parse_qml_document(broken))
+            _write_qml(tmpdir, "broken.qml", "<qgis><renderer-v2>")
+            self.assertEqual(build_style_cache(tmpdir), {})
 
-    def test_qml_map_has_only_point(self):
-        """フィクスチャフォルダには点用QMLだけがある（他クラスの cache-miss テストの前提）"""
-        self.assertEqual(list(build_qml_map(FIXTURE_DIR)), [QgsWkbTypes.PointGeometry])
-
-    def test_non_qml_xml_returns_none(self):
-        """ルート要素が <qgis> でない XML は _parse_qml_document が None を返す"""
+    def test_xml_without_categorized_renderer_is_skipped(self):
+        """カテゴリ分類レンダラーを持たないXMLはスキップされる"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            other = os.path.join(tmpdir, "other.qml")
-            with open(other, "w", encoding="utf-8") as f:
-                f.write("<root><child/></root>")
-            self.assertIsNone(_parse_qml_document(other))
+            _write_qml(tmpdir, "other.qml", "<root><child/></root>")
+            _write_qml(
+                tmpdir,
+                "single.qml",
+                '<qgis><renderer-v2 type="singleSymbol"><symbols>'
+                '<symbol type="marker" name="0"/></symbols></renderer-v2></qgis>',
+            )
+            self.assertEqual(build_style_cache(tmpdir), {})
 
 
-class TestApplyQmlForm(unittest.TestCase):
-    """apply_qml_form: Fields/Forms だけをレイヤに適用する"""
+class TestApplyLayerStyle(_PointCacheTestCase):
+    """apply_layer_style: レイヤ1件分の処理列（ラベル/レンダラー/フォーム/回転/間断）"""
 
-    @classmethod
-    def setUpClass(cls):
-        get_qgis_app()
-        cls.cache = _point_cache()
+    def test_regular_layer(self):
+        """非注記: QMLのカテゴリ分けレンダラー（シンボル2件）+ フォーム。ラベルは無効のまま"""
+        layer = _make_layer(POINT_LAYER_URI)
+        apply_layer_style(layer, self.cache)
+        self.assertEqual(layer.renderer().type(), "categorizedSymbol")
+        self.assertEqual(len(layer.renderer().symbols(QgsRenderContext())), 2)
+        self.assertFalse(layer.labelsEnabled())
+        self.assertEqual(_widget_type(layer, "HCODE2"), "ValueMap")
 
-    def test_applies_widgets_and_field_settings(self):
+    def test_form_settings_are_applied(self):
         """ウィジェット・別名・labelOnTop・編集可否・デフォルト式・制約式が反映される"""
         layer = _make_layer(POINT_LAYER_URI)
-        self.assertTrue(apply_qml_form(layer, self.cache))
+        apply_layer_style(layer, self.cache)
         fields = layer.fields()
         form = layer.editFormConfig()
 
@@ -135,122 +160,18 @@ class TestApplyQmlForm(unittest.TestCase):
         self.assertEqual(layer.editorWidgetSetup(i_size).config()["Max"], 99999)
         self.assertIn('"字の大きさ" IS NULL', layer.constraintExpression(i_size))
 
-    def test_field_missing_in_qml_is_untouched(self):
-        """QMLに設定がないフィールドはデフォルト（ウィジェット未指定・別名なし）のまま"""
-        layer = _make_layer(POINT_LAYER_URI)
-        apply_qml_form(layer, self.cache)
-        i = layer.fields().lookupField("独自列")
-        self.assertEqual(layer.editorWidgetSetup(i).type(), "")
-        self.assertEqual(layer.attributeAlias(i), "")
-
-    def test_keeps_renderer(self):
-        """フォーム適用はレンダラーを変更しない（注記レイヤのNullSymbolが残る）"""
-        layer = _make_layer(POINT_LAYER_URI)
-        layer.setRenderer(QgsNullSymbolRenderer())
-        apply_qml_form(layer, self.cache)
-        self.assertEqual(layer.renderer().type(), "nullSymbol")
-
-    def test_unknown_geometry_returns_false(self):
-        """キャッシュにないジオメトリタイプは False を返し、何も変えない"""
-        layer = _make_layer(LINE_LAYER_URI)
-        self.assertFalse(apply_qml_form(layer, self.cache))
-        i = layer.fields().lookupField("HCODE2")
-        self.assertEqual(layer.editorWidgetSetup(i).type(), "")
-
-    def test_empty_cache_returns_false(self):
-        """空キャッシュでは False"""
-        layer = _make_layer(POINT_LAYER_URI)
-        self.assertFalse(apply_qml_form(layer, {}))
-
-    def test_qml_field_absent_from_layer_is_ignored(self):
-        """QMLにあってレイヤにないフィールド（分類コード・字の大きさ）は無視され、フィールドも増えない"""
-        layer = _make_layer(
-            "Point?crs=EPSG:6677&field=HCODE2:string&field=独自列:string"
-        )
-        self.assertTrue(apply_qml_form(layer, self.cache))
-        self.assertEqual(layer.fields().names(), ["HCODE2", "独自列"])
-        i = layer.fields().lookupField("HCODE2")
-        self.assertEqual(layer.editorWidgetSetup(i).type(), "ValueMap")
-
-
-class TestApplyQmlByGeomType(unittest.TestCase):
-    """apply_qml_by_geom_type: QmlStyle キャッシュからレンダラーだけを適用する"""
-
-    @classmethod
-    def setUpClass(cls):
-        get_qgis_app()
-        cls.cache = _point_cache()
-
-    def test_applies_categorized_renderer(self):
-        """点レイヤにカテゴリ分けレンダラー（シンボル2件）が複製される"""
-        layer = _make_layer(POINT_LAYER_URI)
-        self.assertTrue(apply_qml_by_geom_type(layer, self.cache))
-        self.assertEqual(layer.renderer().type(), "categorizedSymbol")
-        self.assertEqual(len(layer.renderer().symbols(QgsRenderContext())), 2)
-
-    def test_does_not_touch_form(self):
-        """レンダラー適用だけではフォーム設定は変わらない"""
-        layer = _make_layer(POINT_LAYER_URI)
-        self.assertTrue(apply_qml_by_geom_type(layer, self.cache))
-        i = layer.fields().lookupField("HCODE2")
-        self.assertEqual(layer.editorWidgetSetup(i).type(), "")
-
-    def test_unknown_geometry_returns_false(self):
-        """キャッシュにないジオメトリタイプは False でレンダラー未変更"""
-        layer = _make_layer(LINE_LAYER_URI)
-        self.assertFalse(apply_qml_by_geom_type(layer, self.cache))
-        self.assertEqual(layer.renderer().type(), "singleSymbol")
-
-
-class TestApplyLayerStyle(unittest.TestCase):
-    """apply_layer_style: レイヤ1件分の処理列（ラベル/レンダラー/フォーム/回転/間断）"""
-
-    @classmethod
-    def setUpClass(cls):
-        get_qgis_app()
-        cls.cache = _point_cache()
-
     def test_annotation_layer(self):
-        """注記: ラベル有効・NullSymbol・フォーム適用の3点が揃う"""
-        layer = _make_layer(POINT_LAYER_URI)
-        apply_layer_style(layer, self.cache, is_annotation=True, is_direction=False)
+        """注記（注記内容あり）: ラベル有効・NullSymbol・フォーム適用の3点が揃う"""
+        layer = _make_layer(ANNOTATION_LAYER_URI)
+        apply_layer_style(layer, self.cache)
         self.assertTrue(layer.labelsEnabled())
         self.assertEqual(layer.renderer().type(), "nullSymbol")
-        i = layer.fields().lookupField("HCODE2")
-        self.assertEqual(layer.editorWidgetSetup(i).type(), "ValueMap")
-
-    def test_regular_layer(self):
-        """非注記: QMLレンダラー + フォーム。ラベルは無効のまま"""
-        layer = _make_layer(POINT_LAYER_URI)
-        apply_layer_style(layer, self.cache, is_annotation=False, is_direction=False)
-        self.assertEqual(layer.renderer().type(), "categorizedSymbol")
-        self.assertFalse(layer.labelsEnabled())
-        i = layer.fields().lookupField("HCODE2")
-        self.assertEqual(layer.editorWidgetSetup(i).type(), "ValueMap")
-        self.assertTrue(
-            layer.editFormConfig().readOnly(layer.fields().lookupField("分類コード"))
-        )
-
-    def test_kandan_filter_runs_last_and_keeps_form(self):
-        """間断区分フィールドがあればルールベースに変換され、フォーム設定は残る"""
-        layer = _make_layer(POINT_LAYER_URI + "&field=間断区分:integer")
-        apply_layer_style(layer, self.cache, is_annotation=False, is_direction=False)
-        self.assertEqual(layer.renderer().type(), "RuleRenderer")
-        i = layer.fields().lookupField("HCODE2")
-        self.assertEqual(layer.editorWidgetSetup(i).type(), "ValueMap")
-
-    def test_empty_cache_is_safe(self):
-        """空キャッシュ（スタイルフォルダ未指定）でも例外なく動き、レンダラーは既定のまま"""
-        layer = _make_layer(POINT_LAYER_URI)
-        apply_layer_style(layer, {}, is_annotation=False, is_direction=False)
-        self.assertEqual(layer.renderer().type(), "singleSymbol")
-        i = layer.fields().lookupField("HCODE2")
-        self.assertEqual(layer.editorWidgetSetup(i).type(), "")
+        self.assertEqual(_widget_type(layer, "HCODE2"), "ValueMap")
 
     def test_direction_layer_sets_rotation(self):
-        """方向: QMLレンダラーの各シンボルに方向角による回転式が設定され、フォームも適用される"""
-        layer = _make_layer(POINT_LAYER_URI + "&field=方向角:double")
-        apply_layer_style(layer, self.cache, is_annotation=False, is_direction=True)
+        """方向（方向角あり）: QMLレンダラーの各シンボルに回転式が設定され、フォームも適用される"""
+        layer = _make_layer(DIRECTION_LAYER_URI)
+        apply_layer_style(layer, self.cache)
         self.assertEqual(layer.renderer().type(), "categorizedSymbol")
         symbols = layer.renderer().symbols(QgsRenderContext())
         self.assertEqual(len(symbols), 2)
@@ -262,22 +183,54 @@ class TestApplyLayerStyle(unittest.TestCase):
             )
             self.assertTrue(prop.isActive())
             self.assertEqual(prop.expressionString(), '0 - "方向角"')
-        i = layer.fields().lookupField("HCODE2")
-        self.assertEqual(layer.editorWidgetSetup(i).type(), "ValueMap")
+        self.assertEqual(_widget_type(layer, "HCODE2"), "ValueMap")
+
+    def test_kandan_filter_runs_last_and_keeps_form(self):
+        """間断区分フィールドがあればルールベースに変換され、フォーム設定は残る"""
+        layer = _make_layer(POINT_LAYER_URI + "&field=間断区分:integer")
+        apply_layer_style(layer, self.cache)
+        self.assertEqual(layer.renderer().type(), "RuleRenderer")
+        self.assertEqual(_widget_type(layer, "HCODE2"), "ValueMap")
+
+    def test_field_missing_in_qml_is_untouched(self):
+        """QMLに設定がないフィールドはデフォルト（ウィジェット未指定・別名なし）のまま"""
+        layer = _make_layer(POINT_LAYER_URI)
+        apply_layer_style(layer, self.cache)
+        i = layer.fields().lookupField("独自列")
+        self.assertEqual(layer.editorWidgetSetup(i).type(), "")
+        self.assertEqual(layer.attributeAlias(i), "")
+
+    def test_qml_field_absent_from_layer_is_ignored(self):
+        """QMLにあってレイヤにないフィールド（分類コード・字の大きさ）は無視され、フィールドも増えない"""
+        layer = _make_layer(
+            "Point?crs=EPSG:6677&field=HCODE2:string&field=独自列:string"
+        )
+        apply_layer_style(layer, self.cache)
+        self.assertEqual(layer.fields().names(), ["HCODE2", "独自列"])
+        self.assertEqual(_widget_type(layer, "HCODE2"), "ValueMap")
+
+    def test_unknown_geometry_is_untouched(self):
+        """キャッシュにないジオメトリタイプはレンダラーもフォームも既定のまま"""
+        layer = _make_layer(LINE_LAYER_URI)
+        apply_layer_style(layer, self.cache)
+        self.assertEqual(layer.renderer().type(), "singleSymbol")
+        self.assertEqual(_widget_type(layer, "HCODE2"), "")
+
+    def test_empty_cache_is_safe(self):
+        """空キャッシュ（スタイルフォルダ未指定）でも例外なく動き、レンダラーは既定のまま"""
+        layer = _make_layer(POINT_LAYER_URI)
+        apply_layer_style(layer, {})
+        self.assertEqual(layer.renderer().type(), "singleSymbol")
+        self.assertEqual(_widget_type(layer, "HCODE2"), "")
 
 
-class TestExportQlrWithForm(unittest.TestCase):
+class TestExportQlrWithForm(_PointCacheTestCase):
     """export_qlr: フォーム設定を適用したレイヤのQLRにフィールド設定が含まれる"""
-
-    @classmethod
-    def setUpClass(cls):
-        get_qgis_app()
-        cls.cache = _point_cache()
 
     def test_qlr_contains_form_settings(self):
         """QLRに fieldConfiguration（ValueMap）・defaults が書き出され、読み戻しても再現される"""
         layer = _make_layer(POINT_LAYER_URI, "qlr_test")
-        apply_layer_style(layer, self.cache, is_annotation=False, is_direction=False)
+        apply_layer_style(layer, self.cache)
         # QLRエクスポートにはプロジェクト登録が必要
         project = QgsProject.instance()
         project.addMapLayer(layer, False)
