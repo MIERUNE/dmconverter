@@ -1,6 +1,6 @@
 """レイヤ分け＋GeoPackage書き出し
 
-分類コード上位2桁でレイヤを分割し、GeoPackageに書き出す。
+分類コード（4桁 / 上位2桁 / 分けない）× ジオメトリ種別でレイヤを分割し、GeoPackageに書き出す。
 レイヤ名は取得分類コード表の名称を使用する。
 """
 
@@ -151,13 +151,29 @@ class MergeResult:
     layer_parent_codes: dict[str, str] = field(default_factory=dict)
 
 
-def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
+def create_merged_layers(
+    dm_list: list[ParsedDM],
+    granularity: LayerGranularity = DEFAULT_LAYER_GRANULARITY,
+) -> MergeResult:
     """複数ParsedDMからレイヤをマージして作成する。
 
-    同じ分類コード4桁×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
+    同じ分割キー×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
+    分割キーは granularity で決まる（code4: 分類コード4桁 / code2: 上位2桁 / none: 分けない）。
     CRSは最初のParsedDMの座標系を使用する。
     各要素のジオメトリ変換にはそれぞれのファイルのmap_sheetを使用する。
+
+    Args:
+        dm_list: 解析済みDMのリスト
+        granularity: レイヤ分割の粒度
+
+    Returns:
+        MergeResult。layer_parent_codes の値は上位2桁（none のときは空文字＝サブグループなし）
+
+    Raises:
+        ValueError: 未知の粒度が渡された場合
     """
+    if granularity not in {key for key, _ in LAYER_GRANULARITY_OPTIONS}:
+        raise ValueError(f"未知のレイヤ分割粒度です: {granularity!r}")
     if not dm_list:
         return MergeResult()
 
@@ -180,7 +196,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
                 if type_info is None:
                     continue
                 geom_type_name = type_info[0]
-                layer_code = elem.dm_code
+                layer_code = _layer_code(elem.dm_code, granularity)
                 groups[(layer_code, geom_type_name)].append((elem, dm.map_sheet))
 
     layers: list[QgsVectorLayer] = []
@@ -191,8 +207,9 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     # 衝突するレイヤ名を事前検出
     _name_counts: Counter = Counter()
     for layer_code, geom_type_name in groups:
-        g = _get_layer_name(layer_code)
-        _name_counts[g if g == geom_type_name else f"{g}_{geom_type_name}"] += 1
+        _name_counts[
+            _compose_layer_name(_get_layer_name(layer_code), geom_type_name)
+        ] += 1
     _conflicting_names: set[str] = {n for n, c in _name_counts.items() if c > 1}
 
     for (layer_code, geom_type_name), elem_pairs in groups.items():
@@ -211,13 +228,9 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         else:
             fields = _build_fields()
 
-        # レイヤ名: "道路_線", "建物_点", "基準点_注記" など
+        # レイヤ名: "道路縁(街区線)_線"（4桁）, "道路_線"（2桁）, "線"（分けない）など
         data_name = _get_layer_name(layer_code)
-
-        if data_name == geom_type_name:
-            layer_name = data_name
-        else:
-            layer_name = f"{data_name}_{geom_type_name}"
+        layer_name = _compose_layer_name(data_name, geom_type_name)
 
         # 衝突する場合は親グループ名をプレフィックスに付けて一意化
         # 例: "方位_線" → "応用測量整飾_方位_線" / "測量記録等_方位_線"

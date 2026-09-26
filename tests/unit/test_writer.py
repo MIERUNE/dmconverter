@@ -20,6 +20,7 @@ from core.dmconverter.writer.writer import (
     _compose_layer_name,
     _get_layer_name,
     _layer_code,
+    create_merged_layers,
 )
 from tests.utilities import get_qgis_app
 
@@ -70,6 +71,25 @@ def _dm(*elements: ParsedElement) -> ParsedDM:
         map_sheet=MAP_SHEET,
         groups=(ParsedGroup(dm_code=elements[0].dm_code, elements=tuple(elements)),),
     )
+
+
+def _lines_and_polygons() -> ParsedDM:
+    """線3件（2101, 2102, 2203）と面2件（6201, 3001）。中庭線なし"""
+    return _dm(
+        _element("E2", "2101", 1, [(0, 0), (10, 10)]),
+        _element("E2", "2102", 2, [(0, 0), (20, 20)]),
+        _element("E2", "2203", 3, [(0, 0), (30, 30)]),
+        _element("E1", "6201", 10, _square(0, 0, 100)),
+        _element("E1", "3001", 11, _square(20, 20, 40)),
+    )
+
+
+def _layer_summary(result) -> dict[str, tuple[int, str]]:
+    """{レイヤ名: (フィーチャ数, 親コード)}"""
+    return {
+        layer.name(): (layer.featureCount(), result.layer_parent_codes[layer.name()])
+        for layer in result.layers
+    }
 
 
 class TestLayerGranularityDefinitions(unittest.TestCase):
@@ -143,3 +163,88 @@ class TestLayerNameHelpers(unittest.TestCase):
 
     def test_compose_empty_data_name(self):
         self.assertEqual(_compose_layer_name("", "面"), "面")
+
+
+class TestCreateMergedLayersGranularity(unittest.TestCase):
+    """粒度ごとのレイヤ名・フィーチャ数・親コード"""
+
+    @classmethod
+    def setUpClass(cls):
+        get_qgis_app()
+
+    def test_code4_is_default(self):
+        default = _layer_summary(create_merged_layers([_lines_and_polygons()]))
+        explicit = _layer_summary(
+            create_merged_layers([_lines_and_polygons()], "code4")
+        )
+        self.assertEqual(default, explicit)
+
+    def test_code4_layers(self):
+        summary = _layer_summary(create_merged_layers([_lines_and_polygons()], "code4"))
+        self.assertEqual(
+            summary,
+            {
+                "道路縁(街区線)_線": (1, "21"),
+                "軽車道_線": (1, "21"),
+                "道路橋(高架部)_線": (1, "22"),
+                "区域界_面": (1, "62"),
+                "普通建物_面": (1, "30"),
+            },
+        )
+
+    def test_code2_layers(self):
+        summary = _layer_summary(create_merged_layers([_lines_and_polygons()], "code2"))
+        self.assertEqual(
+            summary,
+            {
+                "道路_線": (2, "21"),
+                "道路施設_線": (1, "22"),
+                "諸地・場地_面": (1, "62"),
+                "建物_面": (1, "30"),
+            },
+        )
+
+    def test_none_layers(self):
+        summary = _layer_summary(create_merged_layers([_lines_and_polygons()], "none"))
+        self.assertEqual(summary, {"線": (3, ""), "面": (2, "")})
+
+    def test_none_keeps_record_types_separate(self):
+        """面(E1)と円(E3)は同じPolygonでも別レイヤのまま"""
+        dm = _dm(
+            _element("E1", "3001", 1, _square(0, 0, 10)),
+            _element("E3", "3001", 2, [(0, 0), (10, 0), (5, 5)]),
+        )
+        names = sorted(
+            layer.name() for layer in create_merged_layers([dm], "none").layers
+        )
+        self.assertEqual(names, ["円", "面"])
+
+    def test_feature_total_is_same_for_all_granularities(self):
+        totals = {
+            granularity: sum(
+                layer.featureCount()
+                for layer in create_merged_layers(
+                    [_lines_and_polygons()], granularity
+                ).layers
+            )
+            for granularity, _ in LAYER_GRANULARITY_OPTIONS
+        }
+        self.assertEqual(totals, {"code4": 5, "code2": 5, "none": 5})
+
+    def test_unknown_parent_code_uses_code_as_name(self):
+        dm = _dm(_element("E2", "9901", 1, [(0, 0), (10, 10)]))
+        self.assertEqual(
+            _layer_summary(create_merged_layers([dm], "code4")), {"9901_線": (1, "99")}
+        )
+        self.assertEqual(
+            _layer_summary(create_merged_layers([dm], "code2")), {"99_線": (1, "99")}
+        )
+
+    def test_unknown_granularity_raises(self):
+        with self.assertRaises(ValueError):
+            create_merged_layers([_lines_and_polygons()], "xxx")
+
+    def test_unknown_granularity_raises_even_without_elements(self):
+        empty = ParsedDM(mesh_info=MESH_INFO, map_sheet=MAP_SHEET, groups=())
+        with self.assertRaises(ValueError):
+            create_merged_layers([empty], "xxx")
