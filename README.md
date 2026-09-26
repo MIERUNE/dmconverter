@@ -16,6 +16,7 @@
 - 単一ファイルの変換、またはフォルダを指定して複数ファイルを一括変換
 - 座標系番号（1〜19）からJGD2011平面直角座標系を自動判定
 - 座標系・地図情報レベルが異なるファイルは自動スキップ
+- レイヤ分割の粒度を選択可能（分類コード4桁 / 2桁 / 分けない。レコードタイプ別の分割は常に維持）。QField で分類コードを付け替える運用では「分けない」を推奨
 - E7 注記レイヤへのラベル表示を自動設定
 - 変換ログをテキストファイルに出力（オプション）
 
@@ -80,7 +81,7 @@ DM ファイルが QGIS プロジェクトに表示されるまでの処理の�
 1. **reader**: DM ファイルをバイナリとして読み込み、84バイト単位のレコードに分割
 2. **classifier**: レコードを種別（INDEX / MAP_SHEET / HEADER / ELEMENT / COORDINATE）に分類
 3. **parser**: 分類済みレコードを解釈し、座標・属性を持つ `ParsedDM` に変換
-4. **writer.create_merged_layers**: 複数の `ParsedDM` をマージして `QgsVectorLayer` を生成
+4. **writer.create_merged_layers**: 複数の `ParsedDM` をマージし、選択した粒度（分類コード4桁 / 2桁 / 分けない）× レコードタイプ（面 / 線 / 円 / 円弧 / 点 / 方向 / 注記）で `QgsVectorLayer` を生成
 5. **writer.save_to_geopackage**: `QgsVectorLayer` を GeoPackage ファイルに書き出し
 6. **log_writer**: 変換結果サマリーをテキストファイルに出力（オプション）
 7. **algorithm**: 生成した GeoPackage をプロジェクトに追加し、マップをズーム調整

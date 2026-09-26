@@ -6,7 +6,6 @@ import os
 
 from qgis.core import (
     QgsCoordinateTransform,
-    QgsFeatureRequest,
     QgsLayerTreeGroup,
     QgsProcessingAlgorithm,
     QgsProcessingParameterFile,
@@ -26,6 +25,31 @@ from .writer.style import (
     build_style_cache,
     export_qlr,
 )
+
+
+def _resolve_parent_code(layer: QgsVectorLayer) -> str | None:
+    """レイヤ内の HCODE2 のユニーク値から、レイヤツリーのサブグループ用の上位2桁を決める。
+
+    分類コードで分けずに変換されたレイヤ（複数の上位2桁が混在）にも対応する。
+
+    Returns:
+        上位2桁が1種類ならその2桁。HCODE2 フィールドが無い、または値が無い場合は空文字
+        （呼び出し側で「未分類」グループに入る）。複数種類が混在する場合は None
+        （サブグループを作らず DM 直下に置く）。
+    """
+    hcode2_idx = layer.fields().lookupField("HCODE2")
+    if hcode2_idx < 0:
+        return ""
+    prefixes = {
+        value[:2]
+        for value in layer.uniqueValues(hcode2_idx)
+        if isinstance(value, str) and value
+    }
+    if not prefixes:
+        return ""
+    if len(prefixes) == 1:
+        return prefixes.pop()
+    return None
 
 
 class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
@@ -156,28 +180,24 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
                     feedback.pushWarning(f"レイヤ無効: {layer_name}")
                     continue
 
-                # HCODE2フィールドの先頭2文字で分類コードを取得
-                # CLASSIFICATIONSにない場合は2文字コードをそのままグループ名に使用
-                parent_code = ""
-                hcode2_idx = layer.fields().lookupField("HCODE2")
-                if hcode2_idx >= 0:
-                    feat = next(
-                        layer.getFeatures(QgsFeatureRequest().setLimit(1)), None
-                    )
-                    if feat:
-                        parent_code = str(feat.attribute("HCODE2") or "")[:2]
-
-                sg_name = (
-                    CLASSIFICATIONS.get(parent_code, {}).get("name", parent_code)
-                    or "未分類"
-                )
-                if sg_name not in sub_groups:
-                    sub_groups[sg_name] = dm_group.findGroup(
-                        sg_name
-                    ) or dm_group.addGroup(sg_name)
-
                 project.addMapLayer(layer, False)
-                sub_groups[sg_name].addLayer(layer)
+
+                # HCODE2 の上位2桁でサブグループを決める
+                # CLASSIFICATIONSにない場合は2文字コードをそのままグループ名に使用
+                parent_code = _resolve_parent_code(layer)
+                if parent_code is None:
+                    # 分類コードが混在するレイヤはサブグループを作らず DM 直下に置く
+                    dm_group.addLayer(layer)
+                else:
+                    sg_name = (
+                        CLASSIFICATIONS.get(parent_code, {}).get("name", parent_code)
+                        or "未分類"
+                    )
+                    if sg_name not in sub_groups:
+                        sub_groups[sg_name] = dm_group.findGroup(
+                            sg_name
+                        ) or dm_group.addGroup(sg_name)
+                    sub_groups[sg_name].addLayer(layer)
 
                 apply_layer_style(layer, style_cache, feedback=feedback)
 

@@ -1,6 +1,6 @@
 """レイヤ分け＋GeoPackage書き出し
 
-分類コード上位2桁でレイヤを分割し、GeoPackageに書き出す。
+分類コード（4桁 / 上位2桁 / 分けない）× ジオメトリ種別でレイヤを分割し、GeoPackageに書き出す。
 レイヤ名は取得分類コード表の名称を使用する。
 """
 
@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field, replace
+from typing import Literal
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -32,6 +33,46 @@ from ..schema import (
 )
 from .crs import get_epsg
 from .geometry import direction_angle, group_ring_polygons, to_ring_polygon_geometry
+
+# レイヤ分割の粒度。code4=分類コード4桁, code2=上位2桁, none=分類コードで分けない
+LayerGranularity = Literal["code4", "code2", "none"]
+
+# (内部キー, UI表示名)。順序は Processing の Enum パラメータのインデックスに対応する
+LAYER_GRANULARITY_OPTIONS: tuple[tuple[LayerGranularity, str], ...] = (
+    ("code4", "分類コード4桁"),
+    ("code2", "分類コード2桁"),
+    ("none", "分類コードで分けない"),
+)
+DEFAULT_LAYER_GRANULARITY: LayerGranularity = "code4"
+
+_GRANULARITY_KEYS = frozenset(key for key, _ in LAYER_GRANULARITY_OPTIONS)
+
+
+def _check_granularity(granularity: str) -> None:
+    """粒度キーを検証する。未知なら ValueError。"""
+    if granularity not in _GRANULARITY_KEYS:
+        raise ValueError(f"未知のレイヤ分割粒度です: {granularity!r}")
+
+
+def _layer_code(dm_code: str, granularity: LayerGranularity) -> str:
+    """粒度に応じたレイヤ分割キーを返す。
+
+    Args:
+        dm_code: 4桁分類コード
+        granularity: レイヤ分割の粒度
+
+    Returns:
+        code4 → 4桁コードそのまま、code2 → 上位2桁、none → 空文字
+
+    Raises:
+        ValueError: 未知の粒度が渡された場合
+    """
+    _check_granularity(granularity)
+    if granularity == "code2":
+        return dm_code[:2]
+    if granularity == "none":
+        return ""
+    return dm_code
 
 
 def _build_fields() -> QgsFields:
@@ -62,18 +103,77 @@ def _build_direction_fields() -> QgsFields:
 
 
 def _get_layer_name(layer_code: str) -> str:
-    """4桁分類コードからレイヤ名を返す。"""
+    """レイヤ分割キーからレイヤ名の分類部分を返す。
+
+    Args:
+        layer_code: _layer_code() が返す分割キー（4桁 / 2桁 / 空文字）
+
+    Returns:
+        4桁: データ名（"00" はグループ名）。コード表にない場合はコードそのまま
+        2桁: グループ名。コード表にない場合はコードそのまま
+        空文字: 空文字（レイヤ名はジオメトリ種別名だけになる）
+    """
+    if not layer_code:
+        return ""
     parent_code = layer_code[:2]
-    data_code = layer_code[2:]
     group = CLASSIFICATIONS.get(parent_code)
     if group is None:
         return layer_code
+    if len(layer_code) == 2:
+        return group["name"]
+    data_code = layer_code[2:]
     if data_code == "00":
         return group["name"]
     data_name = group.get(data_code)
     if data_name is None:
         return layer_code
     return data_name
+
+
+def _compose_layer_name(data_name: str, geom_type_name: str) -> str:
+    """分類部分とジオメトリ種別名からレイヤ名を組み立てる。
+
+    分類部分が空、またはジオメトリ種別名と同じ場合はジオメトリ種別名だけを返す。
+    例: ("道路縁(街区線)", "線") → "道路縁(街区線)_線"
+        ("注記", "注記") → "注記"
+        ("", "面") → "面"
+    """
+    if not data_name or data_name == geom_type_name:
+        return geom_type_name
+    return f"{data_name}_{geom_type_name}"
+
+
+def _group_ring_polygons_by_code(
+    elem_pairs: list[tuple[ParsedElement, MapSheetInfo]],
+) -> list[tuple[ParsedElement, MapSheetInfo, list[tuple[ParsedElement, MapSheetInfo]]]]:
+    """面要素を4桁分類コードごとに分けて group_ring_polygons を適用する。
+
+    レイヤ分割の粒度が粗い場合でも、中庭線（図形区分31）は同じ4桁コードの外輪にだけ対応付ける。
+    中庭線が1件もなければ空リストを返す（呼び出し元は通常処理にフォールバック）。
+    中庭線があるコードは group_ring_polygons の結果を、無いコードは座標を持つ要素を
+    (elem, ms, []) として並べて返す（要素の欠落を防ぐ）。
+    """
+    if not any(elem.zukei_kubun == 31 for elem, _ in elem_pairs):
+        return []
+
+    by_code: dict[str, list[tuple[ParsedElement, MapSheetInfo]]] = defaultdict(list)
+    for elem, map_sheet in elem_pairs:
+        by_code[elem.dm_code].append((elem, map_sheet))
+
+    result: list[
+        tuple[ParsedElement, MapSheetInfo, list[tuple[ParsedElement, MapSheetInfo]]]
+    ] = []
+    for code_pairs in by_code.values():
+        ring_groups = group_ring_polygons(code_pairs)
+        if ring_groups:
+            result.extend(ring_groups)
+        else:
+            result.extend(
+                (elem, map_sheet, [])
+                for elem, map_sheet in code_pairs
+                if elem.coordinates
+            )
+    return result
 
 
 def create_layers(dm: ParsedDM) -> list[QgsVectorLayer]:
@@ -91,13 +191,28 @@ class MergeResult:
     layer_parent_codes: dict[str, str] = field(default_factory=dict)
 
 
-def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
+def create_merged_layers(
+    dm_list: list[ParsedDM],
+    granularity: LayerGranularity = DEFAULT_LAYER_GRANULARITY,
+) -> MergeResult:
     """複数ParsedDMからレイヤをマージして作成する。
 
-    同じ分類コード4桁×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
+    同じ分割キー×ジオメトリタイプのフィーチャは1つのレイヤに統合される。
+    分割キーは granularity で決まる（code4: 分類コード4桁 / code2: 上位2桁 / none: 分けない）。
     CRSは最初のParsedDMの座標系を使用する。
     各要素のジオメトリ変換にはそれぞれのファイルのmap_sheetを使用する。
+
+    Args:
+        dm_list: 解析済みDMのリスト
+        granularity: レイヤ分割の粒度
+
+    Returns:
+        MergeResult。layer_parent_codes の値は上位2桁（none のときは空文字＝サブグループなし）
+
+    Raises:
+        ValueError: 未知の粒度が渡された場合
     """
+    _check_granularity(granularity)
     if not dm_list:
         return MergeResult()
 
@@ -120,7 +235,7 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
                 if type_info is None:
                     continue
                 geom_type_name = type_info[0]
-                layer_code = elem.dm_code
+                layer_code = _layer_code(elem.dm_code, granularity)
                 groups[(layer_code, geom_type_name)].append((elem, dm.map_sheet))
 
     layers: list[QgsVectorLayer] = []
@@ -131,8 +246,9 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
     # 衝突するレイヤ名を事前検出
     _name_counts: Counter = Counter()
     for layer_code, geom_type_name in groups:
-        g = _get_layer_name(layer_code)
-        _name_counts[g if g == geom_type_name else f"{g}_{geom_type_name}"] += 1
+        _name_counts[
+            _compose_layer_name(_get_layer_name(layer_code), geom_type_name)
+        ] += 1
     _conflicting_names: set[str] = {n for n, c in _name_counts.items() if c > 1}
 
     for (layer_code, geom_type_name), elem_pairs in groups.items():
@@ -151,13 +267,9 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         else:
             fields = _build_fields()
 
-        # レイヤ名: "道路_線", "建物_点", "基準点_注記" など
+        # レイヤ名: "道路縁(街区線)_線"（4桁）, "道路_線"（2桁）, "線"（分けない）など
         data_name = _get_layer_name(layer_code)
-
-        if data_name == geom_type_name:
-            layer_name = data_name
-        else:
-            layer_name = f"{data_name}_{geom_type_name}"
+        layer_name = _compose_layer_name(data_name, geom_type_name)
 
         # 衝突する場合は親グループ名をプレフィックスに付けて一意化
         # 例: "方位_線" → "応用測量整飾_方位_線" / "測量記録等_方位_線"
@@ -183,7 +295,9 @@ def create_merged_layers(dm_list: list[ParsedDM]) -> MergeResult:
         # フィーチャ追加
         # 面(E1)に中庭線（内輪, zukei_kubun=31）が含まれる場合はリングポリゴンに変換する
         features: list[QgsFeature] = []
-        ring_groups = group_ring_polygons(elem_pairs) if geom_type_name == "面" else []
+        ring_groups = (
+            _group_ring_polygons_by_code(elem_pairs) if geom_type_name == "面" else []
+        )
 
         # (elem, geom) ペアのリストを構築
         elem_geom_pairs: list[tuple[ParsedElement, QgsGeometry]] = []

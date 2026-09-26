@@ -13,6 +13,7 @@ from qgis.core import (
     QgsLayerTreeGroup,
     QgsProcessingAlgorithm,
     QgsProcessingParameterBoolean,
+    QgsProcessingParameterEnum,
     QgsProcessingParameterFile,
     QgsProcessingParameterFileDestination,
     QgsProcessingParameterString,
@@ -28,7 +29,11 @@ from .parser.parser import parse
 from .parser.reader import detect_encoding, read_dmi_coordinate_system, read_records
 from .writer.log_writer import write_log
 from .writer.style import apply_layer_style, build_style_cache, export_qlr
-from .writer.writer import create_merged_layers, save_to_geopackage
+from .writer.writer import (
+    LAYER_GRANULARITY_OPTIONS,
+    create_merged_layers,
+    save_to_geopackage,
+)
 
 # 現在変換対応している要素タイプ
 _SUPPORTED_TYPES = {"E1", "E2", "E3", "E4", "E5", "E6", "E7"}
@@ -41,6 +46,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_LOG = "OUTPUT_LOG"
     STYLE_FOLDER = "STYLE_FOLDER"
     GROUP_NAME = "GROUP_NAME"
+    LAYER_GRANULARITY = "LAYER_GRANULARITY"
 
     def name(self):
         """アルゴリズムの内部ID"""
@@ -62,6 +68,8 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             "DMファイルをGeoPackageに変換します。どちらか一方を指定してください。スタイルフォルダを指定すると、変換後にQMLのスタイル（レンダラー）と属性フォーム設定を自動適用します。\n"
             "単一ファイル処理：DMファイルを指定\n"
             "複数ファイル処理：フォルダを指定\n\n"
+            "レイヤ分割の粒度（分類コード4桁 / 2桁 / 分けない）を選べます。"
+            "QFieldで分類コードを付け替える運用では「分けない」が便利です。"
         )
 
     def createInstance(self):
@@ -98,6 +106,16 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 "入力：スタイルフォルダ（QML）",
                 behavior=QgsProcessingParameterFile.Folder,
                 optional=True,
+            )
+        )
+
+        # オプション: レイヤ分割の粒度
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.LAYER_GRANULARITY,
+                "レイヤ分割：分類コードの粒度",
+                options=[label for _, label in LAYER_GRANULARITY_OPTIONS],
+                defaultValue=0,
             )
         )
 
@@ -232,7 +250,12 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             return {self.OUTPUT: output_path}
 
         # レイヤ作成（複数ファイルの同名レイヤはマージ）
-        merge_result = create_merged_layers(parsed_list)
+        granularity_index = self.parameterAsEnum(
+            parameters, self.LAYER_GRANULARITY, context
+        )
+        granularity, granularity_label = LAYER_GRANULARITY_OPTIONS[granularity_index]
+        feedback.pushInfo(f"レイヤ分割: {granularity_label}")
+        merge_result = create_merged_layers(parsed_list, granularity)
         layers = merge_result.layers
         if not layers:
             feedback.reportError("変換対象の要素がありません")
@@ -326,15 +349,21 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushWarning(f"レイヤ無効: {name}")
                 continue
 
-            parent_code = self._layer_parent_codes.get(name, "")
-            group_name = CLASSIFICATIONS.get(parent_code, {}).get("name", parent_code)
-            if group_name not in sub_groups:
-                sub_groups[group_name] = dm_group.findGroup(
-                    group_name
-                ) or dm_group.addGroup(group_name)
-
             project.addMapLayer(gpkg_layer, False)
-            sub_groups[group_name].addLayer(gpkg_layer)
+
+            parent_code = self._layer_parent_codes.get(name, "")
+            if parent_code:
+                group_name = CLASSIFICATIONS.get(parent_code, {}).get(
+                    "name", parent_code
+                )
+                if group_name not in sub_groups:
+                    sub_groups[group_name] = dm_group.findGroup(
+                        group_name
+                    ) or dm_group.addGroup(group_name)
+                sub_groups[group_name].addLayer(gpkg_layer)
+            else:
+                # 親コードが空文字（粒度「分けない」、または分類コードが空の不正要素）はサブグループを作らず DM 直下に置く
+                dm_group.addLayer(gpkg_layer)
 
             apply_layer_style(gpkg_layer, style_cache, feedback=feedback)
 
