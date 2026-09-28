@@ -19,10 +19,9 @@ from core.dmconverter.writer.geometry import (
 from qgis.core import QgsWkbTypes
 from tests.utilities import get_qgis_app
 
+# テスト用DMファイル（tests/scripts/generate_test_data.py が生成する合成データ）
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
-CIRCLE_DM_FILE = os.path.join(
-    DATA_DIR, "円10件(円弧4件)_08DF013_新潟市中央区拡張2500.dm"
-)
+CIRCLE_DM_FILE = os.path.join(DATA_DIR, "synthetic_cs12_2500_cp932_rev3.dm")
 
 
 class TestToCircleGeometry(unittest.TestCase):

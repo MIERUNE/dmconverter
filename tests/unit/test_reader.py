@@ -1,16 +1,26 @@
 import os
+import tempfile
 import unittest
 
 from core.dmconverter.parser.reader import detect_encoding, read_records
 
-
-# テスト用DMファイルのパス
+# テスト用DMファイル（tests/scripts/generate_test_data.py が生成する合成データ）
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
-SAMPLE_DM_FILES = [
-    os.path.join(DATA_DIR, "02JF613.dm"),
-    os.path.join(DATA_DIR, "02JF711.dm"),
-    os.path.join(DATA_DIR, "円10件(円弧4件)_08DF013_新潟市中央区拡張2500.dm"),
-]
+
+# ファイル名 → detect_encoding の期待値
+EXPECTED_ENCODINGS = {
+    "synthetic_cs06_1000_cp932.dm": "cp932",
+    "synthetic_cs09_1000_utf8_bom.dm": "utf-8",
+    "synthetic_cs12_2500_cp932_rev3.dm": "cp932",
+    "synthetic_cs08_2500_oldjis.dm": "old_jis",
+    "synthetic_cs01_500_utf8_lf.dm": "utf-8",
+}
+SAMPLE_DM_FILES = [os.path.join(DATA_DIR, name) for name in EXPECTED_ENCODINGS]
+
+
+def _to_old_jis(text: str) -> bytes:
+    """全角文字列を旧型式DMの7bit JIS（EUC-JP の各バイト - 0x80）に符号化する。"""
+    return bytes(b - 0x80 for b in text.encode("euc_jp"))
 
 
 class TestReadRecords(unittest.TestCase):
@@ -79,16 +89,23 @@ class TestReadRecords(unittest.TestCase):
                 self.assertIsInstance(enc, str)
                 self.assertIn(enc, ("utf-8-sig", "utf-8", "cp932", "old_jis"))
 
+    def test_expected_encoding_per_file(self):
+        """合成データ各ファイルが想定どおりのエンコーディングと判定されること"""
+        for name, expected in EXPECTED_ENCODINGS.items():
+            with self.subTest(name=name):
+                enc = detect_encoding(os.path.join(DATA_DIR, name))
+                self.assertEqual(enc, expected)
+
     def test_detect_encoding_old_jis(self):
         """全バイトがASCII範囲のファイルはold_jisと判定されること"""
-        import tempfile
-
-        content = b"M 08CF862 #0#8#C#F#8#6#2!!!!!! 2500\r\n"
+        content = b"M 08SYN004 " + _to_old_jis("テスト") + b" 2500\r\n"
         with tempfile.NamedTemporaryFile(suffix=".dm", delete=False) as f:
             f.write(content)
             tmp_path = f.name
-        enc = detect_encoding(tmp_path)
-        self.assertEqual(enc, "old_jis")
+        try:
+            self.assertEqual(detect_encoding(tmp_path), "old_jis")
+        finally:
+            os.remove(tmp_path)
 
 
 if __name__ == "__main__":

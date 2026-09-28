@@ -13,10 +13,11 @@ from core.dmconverter.parser.classifier import (
 )
 from core.dmconverter.parser.reader import read_records
 
+# テスト用DMファイル（tests/scripts/generate_test_data.py が生成する合成データ）
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 SAMPLE_DM_FILES = [
-    os.path.join(DATA_DIR, "02JF613.dm"),
-    os.path.join(DATA_DIR, "02JF711.dm"),
+    os.path.join(DATA_DIR, "synthetic_cs06_1000_cp932.dm"),
+    os.path.join(DATA_DIR, "synthetic_cs12_2500_cp932_rev3.dm"),
 ]
 
 # サンプルDMファイルから実レコードを読み込み、テスト用に各種レコードを取得する
