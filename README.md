@@ -134,6 +134,7 @@ dmconverter/
 │   ├── parser/                       # DMファイル解析（reader / classifier / parser / models）
 │   └── writer/                       # GeoPackage 生成（writer / geometry / crs / style / log_writer）
 ├── tests/                            # テスト（unit / data）
+│   └── scripts/generate_test_data.py # tests/data の合成DMデータ生成器（--check で一致検証）
 ├── imgs/                             # アイコン画像
 ├── metadata.txt
 └── pyproject.toml

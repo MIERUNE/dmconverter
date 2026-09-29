@@ -7,7 +7,7 @@ QMLスタイルの適用とQLRファイルのエクスポートも行う。
 from __future__ import annotations
 
 import os
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405
 
 from qgis.core import (
     Qgis,
@@ -189,7 +189,8 @@ def _detect_qml_geom_type(qml_path: str) -> QgsWkbTypes.GeometryType | None:
     Raises:
         ET.ParseError: QMLファイルが不正なXMLの場合
     """
-    tree = ET.parse(qml_path)
+    # Parse only local QML files provided by the user
+    tree = ET.parse(qml_path)  # nosec B314
     root = tree.getroot()
     renderer = root.find(".//renderer-v2[@type='categorizedSymbol']")
     if renderer is None:

@@ -21,11 +21,27 @@ from core.dmconverter.parser.parser import (
 )
 from core.dmconverter.parser.reader import detect_encoding, read_records
 
+# テスト用DMファイル（tests/scripts/generate_test_data.py が生成する合成データ）
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 SAMPLE_DM_FILES = [
-    os.path.join(DATA_DIR, "02JF613.dm"),
-    os.path.join(DATA_DIR, "02JF711.dm"),
+    os.path.join(DATA_DIR, "synthetic_cs06_1000_cp932.dm"),
+    os.path.join(DATA_DIR, "synthetic_cs09_1000_utf8_bom.dm"),
+    os.path.join(DATA_DIR, "synthetic_cs12_2500_cp932_rev3.dm"),
+    os.path.join(DATA_DIR, "synthetic_cs08_2500_oldjis.dm"),
+    os.path.join(DATA_DIR, "synthetic_cs01_500_utf8_lf.dm"),
 ]
+CP932_DM_FILE = SAMPLE_DM_FILES[0]
+CIRCLE_DM_FILE = SAMPLE_DM_FILES[2]
+OLD_JIS_DM_FILE = SAMPLE_DM_FILES[3]
+
+# synthetic_cs06_1000_cp932.dm に含まれるレコード（84バイト、デコード済み文字列）
+E2_RECORD = "E22101 0   0   1 2 02350 00   8   2      0      0      0 0       200300000000       "
+E5_RECORD = "E57311 0   0  13 2 02350 00   0   0 250000 500000  12345 1       200300000000       "
+E7_RECORD = "E78121 0   0  16 2 02351 00   4   1  56000 300000      0 0       200300000000       "
+E7_ANNOTATION_LINE = "1    -45   30   10 4合成通り"
+# 座標行: 6組ちょうど / 2組 + 余白(0, 0)
+FULL_COORD_LINE = "  90000  40000  90000 140000  90000 240000  90000 340000  90000 440000  90000 540000"
+PADDED_COORD_LINE = "  63000 520000  63000 600000      0      0      0      0      0      0      0      0"
 
 
 class TestSafeInt(unittest.TestCase):
@@ -90,27 +106,24 @@ class TestFormatDate(unittest.TestCase):
 
 
 class TestParseCoordinateLine2d(unittest.TestCase):
-    def test_full_line_from_sample(self):
-        """サンプルデータの実座標行（6組）を正しく解析する"""
-        line = "1106380 6343101106470 6324501106590 6297801105640 6250001103280 6213101099910 616240"
-        coords = _parse_coordinate_line_2d(line, 6)
+    def test_full_line(self):
+        """座標行（6組ちょうど）を正しく解析する"""
+        coords = _parse_coordinate_line_2d(FULL_COORD_LINE, 6)
         self.assertEqual(len(coords), 6)
-        self.assertEqual(coords[0], Coordinate(x=1106380, y=634310))
-        self.assertEqual(coords[1], Coordinate(x=1106470, y=632450))
-        self.assertEqual(coords[5], Coordinate(x=1099910, y=616240))
+        self.assertEqual(coords[0], Coordinate(x=90000, y=40000))
+        self.assertEqual(coords[1], Coordinate(x=90000, y=140000))
+        self.assertEqual(coords[5], Coordinate(x=90000, y=540000))
 
     def test_line_with_padding(self):
         """パディング（0, 0）ペアを含む行"""
-        line = " 4533511745422 4567361736530      0      0      0      0      0      0      0      0"
-        coords = _parse_coordinate_line_2d(line, 6)
+        coords = _parse_coordinate_line_2d(PADDED_COORD_LINE, 6)
         self.assertEqual(len(coords), 2)
-        self.assertEqual(coords[0], Coordinate(x=453351, y=1745422))
-        self.assertEqual(coords[1], Coordinate(x=456736, y=1736530))
+        self.assertEqual(coords[0], Coordinate(x=63000, y=520000))
+        self.assertEqual(coords[1], Coordinate(x=63000, y=600000))
 
     def test_remaining_limits_output(self):
         """remainingで座標数を制限できる"""
-        line = "1106380 6343101106470 6324501106590 6297801105640 6250001103280 6213101099910 616240"
-        coords = _parse_coordinate_line_2d(line, 2)
+        coords = _parse_coordinate_line_2d(FULL_COORD_LINE, 2)
         self.assertEqual(len(coords), 2)
 
 
@@ -127,25 +140,29 @@ class TestParseCoordinateLine3d(unittest.TestCase):
 class TestExtractCommonFields(unittest.TestCase):
     def test_e2_record(self):
         """E2レコードから共通フィールドを抽出する"""
-        record = "E22101 0 0 0   0 1212 00 00  80  14      0      0      0 0       170300000000      1"
-        fields = _extract_common_fields(record)
+        fields = _extract_common_fields(E2_RECORD)
         self.assertEqual(fields["element_type"], "E2")
         self.assertEqual(fields["dm_code"], "2101")
         self.assertEqual(fields["chiiki_bunrui"], 0)
         self.assertEqual(fields["jouhou_bunrui"], 0)
-        self.assertEqual(fields["hierarchy"], 1)
+        self.assertEqual(fields["element_id"], 1)
+        self.assertEqual(fields["hierarchy"], 2)
         self.assertEqual(fields["data_kubun"], 2)
-        self.assertEqual(fields["coord_count"], 80)
-        self.assertEqual(fields["record_count"], 14)
+        self.assertEqual(fields["seido_kubun"], 35)
+        self.assertEqual(fields["coord_count"], 8)
+        self.assertEqual(fields["record_count"], 2)
+        self.assertEqual(fields["acquired_date"], "2020/03")
+        self.assertIsNone(fields["updated_date"])
+        self.assertIsNone(fields["deleted_date"])
 
     def test_e5_record(self):
         """E5レコードから共通フィールドを抽出する"""
-        record = "E52253 0   0   1 2 00350 00   0   0 7530601721853      0 0       170300000000      1"
-        fields = _extract_common_fields(record)
+        fields = _extract_common_fields(E5_RECORD)
         self.assertEqual(fields["element_type"], "E5")
-        self.assertEqual(fields["dm_code"], "2253")
+        self.assertEqual(fields["dm_code"], "7311")
         self.assertEqual(fields["chiiki_bunrui"], 0)
         self.assertEqual(fields["jouhou_bunrui"], 0)
+        self.assertEqual(fields["element_id"], 13)
         self.assertEqual(fields["coord_count"], 0)
 
     def test_chiiki_and_jouhou_bunrui_field_widths(self):
@@ -158,18 +175,19 @@ class TestExtractCommonFields(unittest.TestCase):
 
 class TestParsePointElement(unittest.TestCase):
     def test_e5_embedded_coordinates(self):
-        """E5要素の埋め込み座標を正しく解析する"""
-        record = "E52253 0   0   1 2 00350 00   0   0 7530601721853      0 0       170300000000      1"
-        elem = _parse_point_element(record, [])
+        """E5要素の埋め込み座標と属性数値・属性区分を正しく解析する"""
+        elem = _parse_point_element(E5_RECORD, [])
         self.assertEqual(elem.element_type, "E5")
-        self.assertEqual(elem.dm_code, "2253")
+        self.assertEqual(elem.dm_code, "7311")
         self.assertEqual(len(elem.coordinates), 1)
-        self.assertEqual(elem.coordinates[0].x, 753060)
-        self.assertEqual(elem.coordinates[0].y, 1721853)
+        self.assertEqual(elem.coordinates[0].x, 250000)
+        self.assertEqual(elem.coordinates[0].y, 500000)
+        self.assertEqual(elem.attribute_value, 12345)
+        self.assertEqual(elem.zokusei_kubun, 1)
 
     def test_e5_short_record_returns_empty_coordinates(self):
         """E5レコードが58bytes未満の場合、座標なしで返しwarningを追加する"""
-        short_record = "E52253 0   0   1 2 00350 00   0   0"  # 35bytes
+        short_record = E5_RECORD[:35]
         warnings: list[str] = []
         elem = _parse_point_element(short_record, warnings)
         self.assertEqual(elem.coordinates, ())
@@ -180,27 +198,25 @@ class TestParsePointElement(unittest.TestCase):
 class TestParseMeshInfo(unittest.TestCase):
     def _make_mesh_rows(self, sheet_id: bytes) -> tuple:
         rec_type = b"M "  # 2 bytes
-        map_name = "杵ヶ原".encode("shift_jis").ljust(20)  # 20 bytes
+        map_name = "合成原".encode("shift_jis").ljust(20)  # 20 bytes
         level = b" 1000"  # 5 bytes
         line_a = (rec_type + sheet_id + map_name + level).ljust(84)
-        return (
-            line_a,
-            b"   9000  44000  10500  46000    26332  80920  1  10500  44000   9000  46000         ",
-            b"02JF602 02JF611                         02JF711 02JF702 02JF604                     ",
-        )
+        # (b): 左下(12000, 8000) 右上(12600, 8800)、座標単位 1(mm) は バイト44-46
+        line_b = b"  12000   8000  12600   8800" + b" " * 16 + b"  1" + b" " * 37
+        return (line_a, line_b, b" " * 84)
 
     def test_coordinate_system(self):
         """図郭識別番号の先頭2文字から座標系番号を抽出する"""
-        mesh_rows = self._make_mesh_rows(b"02JF613 ")
+        mesh_rows = self._make_mesh_rows(b"02SYN013")
         info = _parse_mesh_info(mesh_rows, "shift_jis")
         self.assertEqual(info.coordinate_system, 2)
-        self.assertEqual(info.map_name, "杵ヶ原")
+        self.assertEqual(info.map_name, "合成原")
         self.assertEqual(info.scale, 1000)
 
     def test_coordinate_system_from_index_record(self):
         """Iレコードがある場合、図郭識別番号より優先して座標系番号を取得する"""
         # 図郭識別番号は02系だがIレコードで6系を指定
-        mesh_rows = self._make_mesh_rows(b"02JF613 ")
+        mesh_rows = self._make_mesh_rows(b"02SYN013")
         index_row = b"I  6" + b" " * 80  # 座標系6
         info = _parse_mesh_info(mesh_rows, "shift_jis", index_row=index_row)
         self.assertEqual(info.coordinate_system, 6)
@@ -213,7 +229,7 @@ class TestParseMeshInfo(unittest.TestCase):
 
     def test_coordinate_system_none_when_index_record_invalid(self):
         """Iレコードの座標系が範囲外の場合、図郭識別番号にフォールバックする"""
-        mesh_rows = self._make_mesh_rows(b"02JF613 ")
+        mesh_rows = self._make_mesh_rows(b"02SYN013")
         index_row = b"I 99" + b" " * 80  # 座標系99（無効）
         info = _parse_mesh_info(mesh_rows, "shift_jis", index_row=index_row)
         # Iレコードが無効なので図郭識別番号の02系を使う
@@ -223,38 +239,38 @@ class TestParseMeshInfo(unittest.TestCase):
 class TestParseAnnotationElement(unittest.TestCase):
     def test_e7_coordinates(self):
         """E7要素の代表点座標を正しく解析する"""
-        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
-        annotation_line = "0    -28   15    0 4410                                                             "
+        record = E7_RECORD
+        annotation_line = E7_ANNOTATION_LINE
         elem = _parse_annotation_element(record, (annotation_line,), [])
         self.assertEqual(elem.element_type, "E7")
-        self.assertEqual(elem.dm_code, "7101")
+        self.assertEqual(elem.dm_code, "8121")
         self.assertEqual(len(elem.coordinates), 1)
-        self.assertEqual(elem.coordinates[0].x, 1079383)
-        self.assertEqual(elem.coordinates[0].y, 996705)
+        self.assertEqual(elem.coordinates[0].x, 56000)
+        self.assertEqual(elem.coordinates[0].y, 300000)
 
     def test_e7_annotation_info(self):
         """E7要素の注記情報を正しく解析する"""
-        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
-        annotation_line = "0    -28   15    0 4410                                                             "
+        record = E7_RECORD
+        annotation_line = E7_ANNOTATION_LINE
         elem = _parse_annotation_element(record, (annotation_line,), [])
         assert elem.annotation is not None
-        self.assertEqual(elem.annotation.orientation, 0)
-        self.assertEqual(elem.annotation.angle, -28)
-        self.assertEqual(elem.annotation.size, 15)
-        self.assertEqual(elem.annotation.spacing, 0)
+        self.assertEqual(elem.annotation.orientation, 1)
+        self.assertEqual(elem.annotation.angle, -45)
+        self.assertEqual(elem.annotation.size, 30)
+        self.assertEqual(elem.annotation.spacing, 10)
         self.assertEqual(elem.annotation.line_weight, 4)
-        self.assertEqual(elem.annotation.text, "410")
+        self.assertEqual(elem.annotation.text, "合成通り")
 
     def test_e7_no_annotation_lines(self):
         """後続行がない場合、annotationはNone"""
-        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        record = E7_RECORD
         elem = _parse_annotation_element(record, (), [])
         self.assertIsNone(elem.annotation)
         self.assertEqual(len(elem.coordinates), 1)
 
     def test_e7_short_record_returns_empty_coordinates(self):
         """E7レコードが56bytes未満の場合、座標なしで返しwarningを追加する"""
-        short_record = "E77101 0   0   2 2 04352 00   3   1"  # 35bytes
+        short_record = E7_RECORD[:35]
         warnings: list[str] = []
         elem = _parse_annotation_element(short_record, (), warnings)
         self.assertEqual(elem.coordinates, ())
@@ -263,7 +279,7 @@ class TestParseAnnotationElement(unittest.TestCase):
 
     def test_e7_short_annotation_line_returns_no_annotation(self):
         """後続行が20bytes未満の場合、座標はあるがannotationなしでwarningを追加する"""
-        record = "E77101 0   0   2 2 04352 00   3   11079383 996705        0       170300000000      1"
+        record = E7_RECORD
         short_annotation = "0    -28   15"  # 13bytes
         warnings: list[str] = []
         elem = _parse_annotation_element(record, (short_annotation,), warnings)
@@ -276,7 +292,7 @@ class TestParseAnnotationElement(unittest.TestCase):
 class TestParseE7WithSampleData(unittest.TestCase):
     def test_e7_elements_have_coordinates_and_annotation(self):
         """サンプルデータのE7要素が座標と注記情報を持つ"""
-        dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm (437 E7)
+        dm_path = CP932_DM_FILE
         result = parse(classify(read_records(dm_path), detect_encoding(dm_path)))
         e7_count = 0
         for group in result.groups:
@@ -446,11 +462,6 @@ class TestParseWithSampleData(unittest.TestCase):
                             )
 
 
-CIRCLE_DM_FILE = os.path.join(
-    DATA_DIR, "円10件(円弧4件)_08DF013_新潟市中央区拡張2500.dm"
-)
-
-
 class TestParseE3WithCircleData(unittest.TestCase):
     """E3（円）要素のパーサーテスト（円データファイルを使用）"""
 
@@ -493,7 +504,7 @@ class TestParseE3WithCircleData(unittest.TestCase):
 class TestParseMapSheet(unittest.TestCase):
     def test_map_sheet_from_sample(self):
         """サンプルデータから図郭情報を正しく抽出する"""
-        dm_path = SAMPLE_DM_FILES[0]  # 02JF613.dm
+        dm_path = CP932_DM_FILE
         classified = classify(read_records(dm_path), detect_encoding(dm_path))
         info = _parse_map_sheet(classified.mesh_rows)
         self.assertLess(info.origin_x, info.upper_x)
@@ -502,11 +513,17 @@ class TestParseMapSheet(unittest.TestCase):
 
 
 class TestDecodeOldJisText(unittest.TestCase):
-    def test_full_width_digits_and_letters(self):
-        """#X パターンが全角ASCII文字にデコードされること"""
-        # #0#8#C#F#8#6#2 → ０８ＣＦ８６２
-        result = _decode_old_jis_text("#0#8#C#F#8#6#2")
-        self.assertEqual(result, "０８ＣＦ８６２")
+    def test_full_width_digits(self):
+        """#X パターンが全角数字にデコードされること"""
+        # #0#1#2 → ０１２（EUC-JP A3B0 A3B1 A3B2 の各バイト - 0x80）
+        result = _decode_old_jis_text("#0#1#2")
+        self.assertEqual(result, "０１２")
+
+    def test_katakana(self):
+        """%X パターンが全角カタカナにデコードされること"""
+        # %F%9%H → テスト（EUC-JP A5C6 A5B9 A5C8 の各バイト - 0x80）
+        result = _decode_old_jis_text("%F%9%H")
+        self.assertEqual(result, "テスト")
 
     def test_fullwidth_space_padding(self):
         """!! が全角スペースにデコードされること"""
@@ -515,9 +532,9 @@ class TestDecodeOldJisText(unittest.TestCase):
 
     def test_mixed_digits_and_padding(self):
         """図郭名フィールド相当（数字+全角スペースパディング）のデコード"""
-        # "#0#8#C#F#8#6#2!!!!!!" (7文字+3スペース=20バイト) → デコード後 strip で全角スペース除去
-        result = _decode_old_jis_text("#0#8#C#F#8#6#2!!!!!!")
-        self.assertEqual(result.strip(), "０８ＣＦ８６２")
+        # "#0#1#2!!!!!!!!!!!!!!" (3文字+7スペース=20バイト) → デコード後 strip で全角スペース除去
+        result = _decode_old_jis_text("#0#1#2!!!!!!!!!!!!!!")
+        self.assertEqual(result.strip(), "０１２")
 
     def test_numeric_text_returns_str(self):
         """数値のみのテキストは文字列として返ること（EUC-JPとして変換される場合がある）"""
@@ -537,16 +554,13 @@ class TestDecodeOldJisText(unittest.TestCase):
 
 
 class TestParseMeshInfoOldJis(unittest.TestCase):
-    # 旧型式DM 08CF862 の実際のMレコード先頭行（84バイト）
-    _MESH_ROW = (
-        b"M 08CF862 #0#8#C#F#8#6#2!!!!!! 2500?73c;T9qEZ4pK\\?^!!!!!!!!!!!!!! 2"
-        b"                 "
-    )
+    # 旧型式（7bit JIS）合成データの M レコード(a)行（84バイト、全バイト ASCII）
+    _MESH_ROW = next(iter(read_records(OLD_JIS_DM_FILE)))
 
     def test_map_name_decoded(self):
         """old_jis エンコーディングで図郭名が正しくデコードされること"""
         info = _parse_mesh_info((TestParseMeshInfoOldJis._MESH_ROW,), "old_jis")
-        self.assertEqual(info.map_name, "０８ＣＦ８６２")
+        self.assertEqual(info.map_name, "合成図郭Ｄ")
 
     def test_map_name_no_trailing_fullwidth_space(self):
         """デコード後の図郭名に末尾の全角スペースが含まれないこと"""

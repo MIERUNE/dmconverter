@@ -9,4 +9,7 @@ coverage.xml
 requirements.txt
 poetry.lock
 .ruff_cache
+.qgis-settings/
+# prevent committing actual measurement data
 tests/data/*
+!tests/data/synthetic_*.dm
