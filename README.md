@@ -7,6 +7,8 @@
 - **主な技術**: QGIS3, Python3.9+, PyQGIS, `uv`
 - **提供者**: MIERUNE Inc., 国際航業株式会社
 
+![DM Converter のデモ](docs/dmconverter_demo.gif)
+
 ---
 
 ## 2. 主な機能

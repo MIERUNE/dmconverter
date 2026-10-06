@@ -26,6 +26,7 @@ jobs:
             -ve '.github' \
             -ve './.vscode' \
             -ve '__pycache__/' \
+            -ve './docs' \
             -ve './tests' \
             -ve './pyproject.toml' \
             -ve './.gitignore' \
