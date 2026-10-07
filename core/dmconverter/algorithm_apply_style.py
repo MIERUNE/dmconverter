@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from qgis.core import (
+    Qgis,
     QgsCoordinateTransform,
     QgsFeatureRequest,
     QgsLayerTreeGroup,
@@ -63,7 +64,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFile(
                 self.INPUT_GPKG,
                 "入力：GeoPackageファイル",
-                behavior=QgsProcessingParameterFile.File,
+                behavior=Qgis.ProcessingFileParameterBehavior.File,
                 fileFilter="GeoPackage Files (*.gpkg)",
             )
         )
@@ -72,7 +73,7 @@ class ApplyStyleAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFile(
                 self.STYLE_FOLDER,
                 "入力：スタイルフォルダ（QML）",
-                behavior=QgsProcessingParameterFile.Folder,
+                behavior=Qgis.ProcessingFileParameterBehavior.Folder,
             )
         )
 

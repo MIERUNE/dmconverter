@@ -9,6 +9,7 @@ import os
 from collections import Counter
 
 from qgis.core import (
+    Qgis,
     QgsCoordinateTransform,
     QgsLayerTreeGroup,
     QgsProcessingAlgorithm,
@@ -83,7 +84,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFile(
                 self.INPUT_FILES,
                 "入力：DMファイル",
-                behavior=QgsProcessingParameterFile.File,
+                behavior=Qgis.ProcessingFileParameterBehavior.File,
                 fileFilter="DM Files (*.dm)",
                 optional=True,
             )
@@ -94,7 +95,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFile(
                 self.INPUT_FOLDER,
                 "入力：DMファイルが格納されたフォルダ",
-                behavior=QgsProcessingParameterFile.Folder,
+                behavior=Qgis.ProcessingFileParameterBehavior.Folder,
                 optional=True,
             )
         )
@@ -104,7 +105,7 @@ class DmToGeoPackageAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFile(
                 self.STYLE_FOLDER,
                 "入力：スタイルフォルダ（QML）",
-                behavior=QgsProcessingParameterFile.Folder,
+                behavior=Qgis.ProcessingFileParameterBehavior.Folder,
                 optional=True,
             )
         )
