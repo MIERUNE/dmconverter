@@ -20,7 +20,7 @@ from qgis.core import (
     QgsVectorLayer,
     QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import QVariant
+from qgis.PyQt.QtCore import QMetaType
 
 from ..constants import CLASSIFICATIONS, get_classification_name
 from ..parser.models import MapSheetInfo, ParsedDM, ParsedElement
@@ -40,8 +40,8 @@ def _build_fields() -> QgsFields:
     for _, field_name, field_type in FIELD_DEFS:
         fields.append(QgsField(field_name, field_type))
         if field_name == "分類コード":
-            fields.append(QgsField("分類名", QVariant.String))
-            fields.append(QgsField("HCODE2", QVariant.String))
+            fields.append(QgsField("分類名", QMetaType.Type.QString))
+            fields.append(QgsField("HCODE2", QMetaType.Type.QString))
     return fields
 
 
@@ -313,7 +313,9 @@ def save_to_geopackage(layers: list[QgsVectorLayer], output_path: str) -> list[s
         options.driverName = "GPKG"
         options.layerName = layer.name()
         if i > 0:
-            options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
+            options.actionOnExistingFile = (
+                QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer
+            )
 
         _error, _msg, _new_fname, _new_layer = (
             QgsVectorFileWriter.writeAsVectorFormatV3(
@@ -323,7 +325,7 @@ def save_to_geopackage(layers: list[QgsVectorLayer], output_path: str) -> list[s
                 options,
             )
         )
-        if _error != QgsVectorFileWriter.NoError:
+        if _error != QgsVectorFileWriter.WriterError.NoError:
             errors.append(f"{layer.name()}: {_msg}")
 
     return errors

@@ -20,7 +20,6 @@ from qgis.core import (
     QgsRuleBasedRenderer,
     QgsSymbolLayer,
     QgsTextFormat,
-    QgsUnitTypes,
     QgsVectorLayer,
     QgsVectorLayerSimpleLabeling,
     QgsWkbTypes,
@@ -28,9 +27,9 @@ from qgis.core import (
 
 # QMLのシンボルタイプ → QgsWkbTypes.GeometryType の対応
 _QML_SYMBOL_TO_GEOM_TYPE: dict[str, QgsWkbTypes.GeometryType] = {
-    "marker": QgsWkbTypes.PointGeometry,
-    "line": QgsWkbTypes.LineGeometry,
-    "fill": QgsWkbTypes.PolygonGeometry,
+    "marker": Qgis.GeometryType.Point,
+    "line": Qgis.GeometryType.Line,
+    "fill": Qgis.GeometryType.Polygon,
 }
 
 
@@ -45,7 +44,7 @@ def apply_annotation_labels(layer: QgsVectorLayer) -> None:
         - 字隔 → 文字間隔（0.1mm→mm変換）
     """
     text_format = QgsTextFormat()
-    text_format.setSizeUnit(QgsUnitTypes.RenderMillimeters)
+    text_format.setSizeUnit(Qgis.RenderUnit.Millimeters)
     text_format.setSize(1.0)  # デフォルトサイズ（data-definedで上書き）
     text_format.setOrientation(Qgis.TextOrientation.Horizontal)
 
@@ -214,9 +213,9 @@ def build_renderer_cache(
     cache: dict[QgsWkbTypes.GeometryType, QgsFeatureRenderer] = {}
     for geom_type, qml_path in qml_map.items():
         wkb_type = {
-            QgsWkbTypes.PointGeometry: QgsWkbTypes.Point,
-            QgsWkbTypes.LineGeometry: QgsWkbTypes.LineString,
-            QgsWkbTypes.PolygonGeometry: QgsWkbTypes.Polygon,
+            Qgis.GeometryType.Point: Qgis.WkbType.Point,
+            Qgis.GeometryType.Line: Qgis.WkbType.LineString,
+            Qgis.GeometryType.Polygon: Qgis.WkbType.Polygon,
         }.get(geom_type)
         if wkb_type is None:
             continue
